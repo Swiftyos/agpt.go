@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/agpt-go/chatbot-api/internal/database"
+	"github.com/agpt-go/chatbot-api/internal/logging"
 	"github.com/agpt-go/chatbot-api/internal/middleware"
 	"github.com/agpt-go/chatbot-api/internal/services"
 	"github.com/agpt-go/chatbot-api/internal/streaming"
@@ -18,11 +19,11 @@ import (
 )
 
 type ChatHandler struct {
-	chatService *services.ChatService
-	validate    *validator.Validate
+	chatService ChatServicer
+	validate    Validator
 }
 
-func NewChatHandler(chatService *services.ChatService) *ChatHandler {
+func NewChatHandler(chatService ChatServicer) *ChatHandler {
 	return &ChatHandler{
 		chatService: chatService,
 		validate:    validator.New(),
@@ -244,7 +245,7 @@ func (h *ChatHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetMessages returns all messages in a session
+// GetMessages returns messages in a session with optional limit
 func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == uuid.Nil {
@@ -258,6 +259,17 @@ func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse limit from query params (default: 100, max: 500)
+	limit := 100
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+			if limit > 500 {
+				limit = 500
+			}
+		}
+	}
+
 	// Verify ownership
 	_, err = h.chatService.GetSession(r.Context(), sessionID, userID)
 	if err != nil {
@@ -265,7 +277,7 @@ func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages, err := h.chatService.GetMessages(r.Context(), sessionID)
+	messages, err := h.chatService.GetMessages(r.Context(), sessionID, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to get messages")
 		return
@@ -397,11 +409,15 @@ func (h *ChatHandler) SendMessageStream(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Save the complete response to database
-	_, _ = h.chatService.SaveStreamedResponse(r.Context(), sessionID, fullContent.String())
+	if _, err := h.chatService.SaveStreamedResponse(r.Context(), sessionID, fullContent.String()); err != nil {
+		logging.Error("failed to save streamed response", err, "sessionID", sessionID.String())
+	}
 
 	// Include user message ID in annotations
-	_ = sw.WriteAnnotation(map[string]string{
+	if err := sw.WriteAnnotation(map[string]string{
 		"userMessageId": userMsg.ID.String(),
 		"messageId":     messageID,
-	})
+	}); err != nil {
+		logging.Warn("failed to write annotation", "error", err)
+	}
 }

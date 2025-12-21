@@ -1,22 +1,21 @@
 package handlers
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
 
+	"github.com/agpt-go/chatbot-api/internal/logging"
 	"github.com/agpt-go/chatbot-api/internal/services"
 	"github.com/go-playground/validator/v10"
 )
 
 type AuthHandler struct {
-	authService *services.AuthService
-	validate    *validator.Validate
+	authService AuthServicer
+	validate    Validator
 }
 
-func NewAuthHandler(authService *services.AuthService) *AuthHandler {
+func NewAuthHandler(authService AuthServicer) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
 		validate:    validator.New(),
@@ -39,8 +38,8 @@ type RefreshRequest struct {
 }
 
 type AuthResponse struct {
-	User   *UserResponse        `json:"user"`
-	Tokens *services.TokenPair  `json:"tokens"`
+	User   *UserResponse       `json:"user"`
+	Tokens *services.TokenPair `json:"tokens"`
 }
 
 type UserResponse struct {
@@ -75,7 +74,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, AuthResponse{
-		User:   toUserResponse(user),
+		User:   UserToResponse(user),
 		Tokens: tokens,
 	})
 }
@@ -103,7 +102,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, AuthResponse{
-		User:   toUserResponse(user),
+		User:   UserToResponse(user),
 		Tokens: tokens,
 	})
 }
@@ -140,13 +139,21 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = h.authService.Logout(r.Context(), req.RefreshToken)
+	if err := h.authService.Logout(r.Context(), req.RefreshToken); err != nil {
+		logging.Warn("failed to revoke refresh token during logout", "error", err)
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
 
 func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
-	state := generateState()
-	// In production, store state in session/cookie for verification
+	// Generate and store OAuth state for CSRF protection
+	state, err := h.authService.GenerateOAuthState(r.Context())
+	if err != nil {
+		logging.Error("failed to generate oauth state", err)
+		writeError(w, http.StatusInternalServerError, "Failed to initiate OAuth flow")
+		return
+	}
+
 	url := h.authService.GetGoogleAuthURL(state)
 	if url == "" {
 		writeError(w, http.StatusNotImplemented, "Google OAuth not configured")
@@ -162,33 +169,27 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In production, verify state parameter
+	// Verify state parameter for CSRF protection
+	state := r.URL.Query().Get("state")
+	if err := h.authService.ValidateOAuthState(r.Context(), state); err != nil {
+		if errors.Is(err, services.ErrInvalidOAuthState) {
+			writeError(w, http.StatusBadRequest, "Invalid or expired OAuth state")
+			return
+		}
+		logging.Error("oauth state validation error", err)
+		writeError(w, http.StatusInternalServerError, "Failed to validate OAuth state")
+		return
+	}
+
 	user, tokens, err := h.authService.HandleGoogleCallback(r.Context(), code)
 	if err != nil {
+		logging.Error("google oauth callback failed", err)
 		writeError(w, http.StatusInternalServerError, "Failed to authenticate with Google")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, AuthResponse{
-		User:   toUserResponse(user),
+		User:   UserToResponse(user),
 		Tokens: tokens,
 	})
-}
-
-func generateState() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-func toUserResponse(user interface{}) *UserResponse {
-	// Use reflection-free approach with struct
-	switch u := user.(type) {
-	case interface{ GetID() interface{} }:
-		_ = u // placeholder
-	}
-
-	// For now, use a simple type assertion approach
-	// This will be properly typed when SQLC generates the models
-	return &UserResponse{}
 }

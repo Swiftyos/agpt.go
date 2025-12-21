@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/agpt-go/chatbot-api/internal/database"
+	"github.com/agpt-go/chatbot-api/internal/logging"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -16,7 +17,9 @@ type ErrorResponse struct {
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		logging.Error("failed to encode JSON response", err)
+	}
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {

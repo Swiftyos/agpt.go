@@ -177,6 +177,7 @@ func TestErrorVariables(t *testing.T) {
 		{"ErrUserExists", ErrUserExists, "user already exists"},
 		{"ErrInvalidToken", ErrInvalidToken, "invalid token"},
 		{"ErrTokenExpired", ErrTokenExpired, "token expired"},
+		{"ErrInvalidOAuthState", ErrInvalidOAuthState, "invalid oauth state"},
 	}
 
 	for _, tt := range tests {

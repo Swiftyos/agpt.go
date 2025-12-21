@@ -97,11 +97,35 @@ func (s *ChatService) DeleteSession(ctx context.Context, sessionID, userID uuid.
 	})
 }
 
-func (s *ChatService) GetMessages(ctx context.Context, sessionID uuid.UUID) ([]database.ChatMessage, error) {
-	messages, err := s.queries.GetChatMessages(ctx, sessionID)
+// MaxMessageHistoryLimit is the maximum number of messages to include in LLM context
+const MaxMessageHistoryLimit = 100
+
+// GetMessages returns messages for a session with an optional limit
+// If limit <= 0, returns all messages (use with caution for large histories)
+func (s *ChatService) GetMessages(ctx context.Context, sessionID uuid.UUID, limit int) ([]database.ChatMessage, error) {
+	if limit <= 0 {
+		// Return all messages (for backward compatibility, but discouraged)
+		messages, err := s.queries.GetChatMessages(ctx, sessionID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get messages: %w", err)
+		}
+		return messages, nil
+	}
+
+	// Get recent messages with limit (returns DESC order)
+	messages, err := s.queries.GetRecentChatMessages(ctx, database.GetRecentChatMessagesParams{
+		SessionID: sessionID,
+		Limit:     int32(limit),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get messages: %w", err)
 	}
+
+	// Reverse to chronological order (ASC)
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+
 	return messages, nil
 }
 
@@ -134,8 +158,8 @@ func (s *ChatService) SendMessage(ctx context.Context, sessionID, userID uuid.UU
 		return nil, nil, err
 	}
 
-	// Get chat history
-	messages, err := s.GetMessages(ctx, sessionID)
+	// Get chat history (limit to recent messages for LLM context window)
+	messages, err := s.GetMessages(ctx, sessionID, MaxMessageHistoryLimit)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -189,8 +213,8 @@ func (s *ChatService) SendMessageStream(ctx context.Context, sessionID, userID u
 		return nil, nil, err
 	}
 
-	// Get chat history
-	messages, err := s.GetMessages(ctx, sessionID)
+	// Get chat history (limit to recent messages for LLM context window)
+	messages, err := s.GetMessages(ctx, sessionID, MaxMessageHistoryLimit)
 	if err != nil {
 		return nil, nil, err
 	}

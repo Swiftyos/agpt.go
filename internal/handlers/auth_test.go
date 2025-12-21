@@ -2,43 +2,106 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
-	"github.com/agpt-go/chatbot-api/internal/config"
+	"github.com/agpt-go/chatbot-api/internal/database"
 	"github.com/agpt-go/chatbot-api/internal/services"
 )
 
+// mockAuthService implements AuthServicer for testing
+type mockAuthService struct {
+	registerFunc         func(ctx context.Context, email, password, name string) (*database.User, *services.TokenPair, error)
+	loginFunc            func(ctx context.Context, email, password string) (*database.User, *services.TokenPair, error)
+	refreshTokensFunc    func(ctx context.Context, refreshToken string) (*services.TokenPair, error)
+	logoutFunc           func(ctx context.Context, refreshToken string) error
+	validateAccessToken  func(tokenString string) (*services.Claims, error)
+	generateOAuthState   func(ctx context.Context) (string, error)
+	validateOAuthState   func(ctx context.Context, state string) error
+	getGoogleAuthURL     func(state string) string
+	handleGoogleCallback func(ctx context.Context, code string) (*database.User, *services.TokenPair, error)
+}
+
+func (m *mockAuthService) Register(ctx context.Context, email, password, name string) (*database.User, *services.TokenPair, error) {
+	if m.registerFunc != nil {
+		return m.registerFunc(ctx, email, password, name)
+	}
+	return nil, nil, errors.New("not implemented")
+}
+
+func (m *mockAuthService) Login(ctx context.Context, email, password string) (*database.User, *services.TokenPair, error) {
+	if m.loginFunc != nil {
+		return m.loginFunc(ctx, email, password)
+	}
+	return nil, nil, services.ErrInvalidCredentials
+}
+
+func (m *mockAuthService) RefreshTokens(ctx context.Context, refreshToken string) (*services.TokenPair, error) {
+	if m.refreshTokensFunc != nil {
+		return m.refreshTokensFunc(ctx, refreshToken)
+	}
+	return nil, services.ErrInvalidToken
+}
+
+func (m *mockAuthService) Logout(ctx context.Context, refreshToken string) error {
+	if m.logoutFunc != nil {
+		return m.logoutFunc(ctx, refreshToken)
+	}
+	return nil
+}
+
+func (m *mockAuthService) ValidateAccessToken(tokenString string) (*services.Claims, error) {
+	if m.validateAccessToken != nil {
+		return m.validateAccessToken(tokenString)
+	}
+	return nil, services.ErrInvalidToken
+}
+
+func (m *mockAuthService) GenerateOAuthState(ctx context.Context) (string, error) {
+	if m.generateOAuthState != nil {
+		return m.generateOAuthState(ctx)
+	}
+	return "mock-state-12345678901234567890123456789012", nil
+}
+
+func (m *mockAuthService) ValidateOAuthState(ctx context.Context, state string) error {
+	if m.validateOAuthState != nil {
+		return m.validateOAuthState(ctx, state)
+	}
+	return services.ErrInvalidOAuthState
+}
+
+func (m *mockAuthService) GetGoogleAuthURL(state string) string {
+	if m.getGoogleAuthURL != nil {
+		return m.getGoogleAuthURL(state)
+	}
+	return "" // Not configured
+}
+
+func (m *mockAuthService) HandleGoogleCallback(ctx context.Context, code string) (*database.User, *services.TokenPair, error) {
+	if m.handleGoogleCallback != nil {
+		return m.handleGoogleCallback(ctx, code)
+	}
+	return nil, nil, errors.New("google oauth not configured")
+}
+
 func createTestAuthHandler(t *testing.T) *AuthHandler {
 	t.Helper()
-	cfg := &config.Config{
-		JWT: config.JWTConfig{
-			Secret:           "test-secret-key-for-testing-minimum-32-chars",
-			AccessExpiresIn:  15 * time.Minute,
-			RefreshExpiresIn: 7 * 24 * time.Hour,
-			Issuer:           "test-issuer",
-		},
-	}
-	authService := services.NewAuthService(nil, cfg)
-	return NewAuthHandler(authService)
+	return NewAuthHandler(&mockAuthService{})
 }
 
 func TestNewAuthHandler(t *testing.T) {
-	cfg := &config.Config{
-		JWT: config.JWTConfig{
-			Secret: "test-secret",
-		},
-	}
-	authService := services.NewAuthService(nil, cfg)
-	handler := NewAuthHandler(authService)
+	mockService := &mockAuthService{}
+	handler := NewAuthHandler(mockService)
 
 	if handler == nil {
 		t.Fatal("NewAuthHandler() returned nil")
 	}
-	if handler.authService != authService {
+	if handler.authService != mockService {
 		t.Error("NewAuthHandler() did not set authService correctly")
 	}
 	if handler.validate == nil {
@@ -303,17 +366,5 @@ func TestUserResponseStruct(t *testing.T) {
 	}
 }
 
-func TestGenerateState(t *testing.T) {
-	state1 := generateState()
-	state2 := generateState()
-
-	if state1 == "" {
-		t.Error("generateState() returned empty string")
-	}
-	if len(state1) != 32 { // 16 bytes * 2 (hex encoding)
-		t.Errorf("generateState() length = %d, want 32", len(state1))
-	}
-	if state1 == state2 {
-		t.Error("generateState() should return unique values")
-	}
-}
+// Note: OAuth state generation has moved to AuthService.GenerateOAuthState
+// which is tested in services/auth_test.go
