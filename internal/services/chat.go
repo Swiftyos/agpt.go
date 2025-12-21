@@ -44,8 +44,8 @@ func (s *ChatService) CreateSession(ctx context.Context, userID uuid.UUID, input
 
 	session, err := s.queries.CreateChatSession(ctx, database.CreateChatSessionParams{
 		UserID:       userID,
-		Title:        title,
-		Model:        model,
+		Title:        &title,
+		Model:        &model,
 		SystemPrompt: &input.SystemPrompt,
 	})
 	if err != nil {
@@ -106,11 +106,12 @@ func (s *ChatService) GetMessages(ctx context.Context, sessionID uuid.UUID) ([]d
 }
 
 func (s *ChatService) SaveMessage(ctx context.Context, sessionID uuid.UUID, role, content string, tokensUsed int) (*database.ChatMessage, error) {
+	tokens := int32(tokensUsed)
 	message, err := s.queries.CreateChatMessage(ctx, database.CreateChatMessageParams{
 		SessionID:  sessionID,
 		Role:       role,
 		Content:    content,
-		TokensUsed: int32(tokensUsed),
+		TokensUsed: &tokens,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to save message: %w", err)

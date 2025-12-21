@@ -77,13 +77,15 @@ func (s *AuthService) Register(ctx context.Context, email, password, name string
 	}
 
 	passwordHash := string(hashedPassword)
+	provider := "local"
+	emailVerified := false
 	user, err := s.queries.CreateUser(ctx, database.CreateUserParams{
 		Email:         email,
 		PasswordHash:  &passwordHash,
 		Name:          name,
-		Provider:      "local",
+		Provider:      &provider,
 		ProviderID:    nil,
-		EmailVerified: false,
+		EmailVerified: &emailVerified,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create user: %w", err)
@@ -195,8 +197,9 @@ func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (*d
 	}
 
 	// Check if user exists by provider
+	googleProvider := "google"
 	user, err := s.queries.GetUserByProvider(ctx, database.GetUserByProviderParams{
-		Provider:   "google",
+		Provider:   &googleProvider,
 		ProviderID: &userInfo.ID,
 	})
 
