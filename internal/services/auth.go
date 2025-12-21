@@ -11,8 +11,10 @@ import (
 
 	"github.com/agpt-go/chatbot-api/internal/config"
 	"github.com/agpt-go/chatbot-api/internal/database"
+	"github.com/agpt-go/chatbot-api/internal/logging"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -23,6 +25,12 @@ var (
 	ErrUserExists         = errors.New("user already exists")
 	ErrInvalidToken       = errors.New("invalid token")
 	ErrTokenExpired       = errors.New("token expired")
+	ErrInvalidOAuthState  = errors.New("invalid oauth state")
+)
+
+const (
+	oauthStateCachePrefix = "oauth_state:"
+	oauthStateExpiration  = 10 * time.Minute
 )
 
 type AuthService struct {
@@ -65,9 +73,13 @@ func NewAuthService(queries *database.Queries, cfg *config.Config) *AuthService 
 
 func (s *AuthService) Register(ctx context.Context, email, password, name string) (*database.User, *TokenPair, error) {
 	// Check if user exists
-	existing, _ := s.queries.GetUserByEmail(ctx, email)
-	if existing.ID != uuid.Nil {
+	existing, err := s.queries.GetUserByEmail(ctx, email)
+	if err == nil && existing.ID != uuid.Nil {
 		return nil, nil, ErrUserExists
+	}
+	// Log unexpected database errors (not "no rows" errors)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		logging.Debug("user lookup during registration", "email", email, "error", err)
 	}
 
 	// Hash password
@@ -134,7 +146,9 @@ func (s *AuthService) RefreshTokens(ctx context.Context, refreshToken string) (*
 	}
 
 	// Revoke old token
-	_ = s.queries.RevokeRefreshToken(ctx, tokenHash)
+	if err := s.queries.RevokeRefreshToken(ctx, tokenHash); err != nil {
+		logging.Warn("failed to revoke old refresh token", "error", err)
+	}
 
 	user, err := s.queries.GetUserByID(ctx, storedToken.UserID)
 	if err != nil {
@@ -171,6 +185,53 @@ func (s *AuthService) ValidateAccessToken(tokenString string) (*Claims, error) {
 	}
 
 	return claims, nil
+}
+
+// GenerateOAuthState creates a new OAuth state and stores it in the cache
+func (s *AuthService) GenerateOAuthState(ctx context.Context) (string, error) {
+	stateBytes := make([]byte, 32)
+	if _, err := rand.Read(stateBytes); err != nil {
+		return "", fmt.Errorf("failed to generate state: %w", err)
+	}
+	state := hex.EncodeToString(stateBytes)
+
+	// Store state in cache with expiration
+	expiresAt := pgtype.Timestamptz{
+		Time:  time.Now().Add(oauthStateExpiration),
+		Valid: true,
+	}
+	err := s.queries.SetCache(ctx, database.SetCacheParams{
+		Key:       oauthStateCachePrefix + state,
+		Value:     []byte("valid"),
+		ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		logging.Error("failed to store oauth state", err)
+		return "", fmt.Errorf("failed to store state: %w", err)
+	}
+
+	return state, nil
+}
+
+// ValidateOAuthState checks if the provided state is valid and removes it from cache
+func (s *AuthService) ValidateOAuthState(ctx context.Context, state string) error {
+	if state == "" {
+		return ErrInvalidOAuthState
+	}
+
+	cacheKey := oauthStateCachePrefix + state
+	_, err := s.queries.GetCache(ctx, cacheKey)
+	if err != nil {
+		logging.Warn("oauth state validation failed", "state", state[:8]+"...", "error", err)
+		return ErrInvalidOAuthState
+	}
+
+	// Delete the state after validation (one-time use)
+	if err := s.queries.DeleteCache(ctx, cacheKey); err != nil {
+		logging.Warn("failed to delete oauth state from cache", "error", err)
+	}
+
+	return nil
 }
 
 func (s *AuthService) GetGoogleAuthURL(state string) string {

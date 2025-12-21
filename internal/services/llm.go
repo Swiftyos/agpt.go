@@ -84,13 +84,26 @@ func (s *LLMService) ChatStream(ctx context.Context, messages []ChatMessage, sys
 		defer stream.Close()
 
 		for {
+			// Check for context cancellation before receiving
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
 			response, err := stream.Recv()
 			if err == io.EOF {
-				chunks <- StreamChunk{Done: true, FinishReason: "stop"}
+				select {
+				case chunks <- StreamChunk{Done: true, FinishReason: "stop"}:
+				case <-ctx.Done():
+				}
 				return
 			}
 			if err != nil {
-				chunks <- StreamChunk{Done: true, FinishReason: "error"}
+				select {
+				case chunks <- StreamChunk{Done: true, FinishReason: "error"}:
+				case <-ctx.Done():
+				}
 				return
 			}
 
@@ -105,7 +118,12 @@ func (s *LLMService) ChatStream(ctx context.Context, messages []ChatMessage, sys
 					chunk.FinishReason = string(choice.FinishReason)
 				}
 
-				chunks <- chunk
+				// Use select to prevent blocking when context is cancelled
+				select {
+				case chunks <- chunk:
+				case <-ctx.Done():
+					return
+				}
 
 				if chunk.Done {
 					return

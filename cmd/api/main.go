@@ -12,6 +12,7 @@ import (
 	"github.com/agpt-go/chatbot-api/internal/config"
 	"github.com/agpt-go/chatbot-api/internal/database"
 	"github.com/agpt-go/chatbot-api/internal/handlers"
+	"github.com/agpt-go/chatbot-api/internal/logging"
 	"github.com/agpt-go/chatbot-api/internal/middleware"
 	"github.com/agpt-go/chatbot-api/internal/services"
 	"github.com/go-chi/chi/v5"
@@ -24,6 +25,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	// Initialize structured logging
+	logging.Initialize(cfg.Server.Environment)
 
 	// Setup context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -117,9 +121,10 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("Server starting on port %s", cfg.Server.Port)
+		logging.Info("server starting", "port", cfg.Server.Port, "environment", cfg.Server.Environment)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			logging.Error("server error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -128,15 +133,16 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	logging.Info("shutting down server...")
 
 	// Graceful shutdown with timeout
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		logging.Error("server forced to shutdown", err)
+		os.Exit(1)
 	}
 
-	log.Println("Server stopped")
+	logging.Info("server stopped")
 }
