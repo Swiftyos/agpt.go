@@ -209,9 +209,9 @@ func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (*d
 			Email:         userInfo.Email,
 			PasswordHash:  nil,
 			Name:          userInfo.Name,
-			Provider:      "google",
+			Provider:      &googleProvider,
 			ProviderID:    &userInfo.ID,
-			EmailVerified: userInfo.EmailVerified,
+			EmailVerified: &userInfo.EmailVerified,
 		})
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create user: %w", err)
