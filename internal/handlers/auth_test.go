@@ -15,15 +15,15 @@ import (
 
 // mockAuthService implements AuthServicer for testing
 type mockAuthService struct {
-	registerFunc          func(ctx context.Context, email, password, name string) (*database.User, *services.TokenPair, error)
-	loginFunc             func(ctx context.Context, email, password string) (*database.User, *services.TokenPair, error)
-	refreshTokensFunc     func(ctx context.Context, refreshToken string) (*services.TokenPair, error)
-	logoutFunc            func(ctx context.Context, refreshToken string) error
-	validateAccessToken   func(tokenString string) (*services.Claims, error)
-	generateOAuthState    func(ctx context.Context) (string, error)
-	validateOAuthState    func(ctx context.Context, state string) error
-	getGoogleAuthURL      func(state string) string
-	handleGoogleCallback  func(ctx context.Context, code string) (*database.User, *services.TokenPair, error)
+	registerFunc         func(ctx context.Context, email, password, name string) (*database.User, *services.TokenPair, error)
+	loginFunc            func(ctx context.Context, email, password string) (*database.User, *services.TokenPair, error)
+	refreshTokensFunc    func(ctx context.Context, refreshToken string) (*services.TokenPair, error)
+	logoutFunc           func(ctx context.Context, refreshToken string) error
+	validateAccessToken  func(tokenString string) (*services.Claims, error)
+	generateOAuthState   func(ctx context.Context) (string, error)
+	validateOAuthState   func(ctx context.Context, state string) error
+	getGoogleAuthURL     func(state string) string
+	handleGoogleCallback func(ctx context.Context, code string) (*database.User, *services.TokenPair, error)
 }
 
 func (m *mockAuthService) Register(ctx context.Context, email, password, name string) (*database.User, *services.TokenPair, error) {

@@ -38,8 +38,8 @@ type RefreshRequest struct {
 }
 
 type AuthResponse struct {
-	User   *UserResponse        `json:"user"`
-	Tokens *services.TokenPair  `json:"tokens"`
+	User   *UserResponse       `json:"user"`
+	Tokens *services.TokenPair `json:"tokens"`
 }
 
 type UserResponse struct {
@@ -193,4 +193,3 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		Tokens: tokens,
 	})
 }
-
