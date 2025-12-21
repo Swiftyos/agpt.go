@@ -222,7 +222,7 @@ func (s *AuthService) ValidateOAuthState(ctx context.Context, state string) erro
 	cacheKey := oauthStateCachePrefix + state
 	_, err := s.queries.GetCache(ctx, cacheKey)
 	if err != nil {
-		logging.Warn("oauth state validation failed", "state", state[:8]+"...", "error", err)
+		logging.Warn("oauth state validation failed", "state", truncateState(state), "error", err)
 		return ErrInvalidOAuthState
 	}
 
@@ -361,4 +361,12 @@ func (s *AuthService) generateTokenPair(ctx context.Context, user *database.User
 func hashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(hash[:])
+}
+
+// truncateState safely truncates a state string for logging
+func truncateState(state string) string {
+	if len(state) <= 8 {
+		return state + "..."
+	}
+	return state[:8] + "..."
 }
