@@ -54,12 +54,23 @@ func UserToResponse(user *database.User) *UserResponse {
 	if user == nil {
 		return nil
 	}
+
+	provider := ""
+	if user.Provider != nil {
+		provider = *user.Provider
+	}
+
+	emailVerified := false
+	if user.EmailVerified != nil {
+		emailVerified = *user.EmailVerified
+	}
+
 	return &UserResponse{
 		ID:            user.ID.String(),
 		Email:         user.Email,
 		Name:          user.Name,
 		AvatarURL:     user.AvatarUrl,
-		Provider:      user.Provider,
-		EmailVerified: user.EmailVerified,
+		Provider:      provider,
+		EmailVerified: emailVerified,
 	}
 }
