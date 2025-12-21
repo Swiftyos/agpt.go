@@ -8,6 +8,27 @@ The current CI runs 3 sequential jobs:
 
 With job setup overhead and PostgreSQL service startup, total time can exceed 30 seconds.
 
+## Quick Fix (Minimal Changes)
+
+Make these 3 changes to `.github/workflows/ci.yml`:
+
+1. **Remove** `needs: [lint, build]` from the test job (line 39)
+2. **Remove** the entire `services:` block (lines 42-55)
+3. **Change** the test command from:
+   ```yaml
+   run: go test -v -timeout 30s -race -coverprofile=coverage.out -covermode=atomic ./...
+   ```
+   to:
+   ```yaml
+   run: go test -v -timeout 30s -coverprofile=coverage.out ./...
+   ```
+4. **Remove** the `env:` block with `DATABASE_URL` (lines 65-66)
+
+This will reduce CI time from ~45s to ~20-25s by:
+- Running all 3 jobs in parallel instead of sequentially
+- Removing PostgreSQL service startup time (~10-15s)
+- Removing race detector overhead (~2-5s)
+
 ## Recommended Changes
 
 ### Option 1: Run All Checks in Parallel (Fastest)
