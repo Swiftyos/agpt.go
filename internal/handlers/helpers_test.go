@@ -26,7 +26,7 @@ func TestWriteJSON(t *testing.T) {
 	}
 
 	var result map[string]string
-	json.NewDecoder(rec.Body).Decode(&result)
+	_ = json.NewDecoder(rec.Body).Decode(&result)
 	if result["message"] != "hello" {
 		t.Errorf("body message = %q, want %q", result["message"], "hello")
 	}
@@ -67,7 +67,7 @@ func TestWriteError(t *testing.T) {
 	}
 
 	var result ErrorResponse
-	json.NewDecoder(rec.Body).Decode(&result)
+	_ = json.NewDecoder(rec.Body).Decode(&result)
 	if result.Error != "Something went wrong" {
 		t.Errorf("error message = %q, want %q", result.Error, "Something went wrong")
 	}
@@ -92,7 +92,7 @@ func TestWriteValidationError(t *testing.T) {
 		}
 
 		var result ErrorResponse
-		json.NewDecoder(rec.Body).Decode(&result)
+		_ = json.NewDecoder(rec.Body).Decode(&result)
 		if result.Error != "Validation failed" {
 			t.Errorf("error = %q, want %q", result.Error, "Validation failed")
 		}
@@ -107,7 +107,7 @@ func TestWriteValidationError(t *testing.T) {
 		writeValidationError(rec, err)
 
 		var result ErrorResponse
-		json.NewDecoder(rec.Body).Decode(&result)
+		_ = json.NewDecoder(rec.Body).Decode(&result)
 		if result.Details["Email"] == "" {
 			t.Error("expected Email validation error")
 		}
@@ -119,7 +119,7 @@ func TestWriteValidationError(t *testing.T) {
 		writeValidationError(rec, err)
 
 		var result ErrorResponse
-		json.NewDecoder(rec.Body).Decode(&result)
+		_ = json.NewDecoder(rec.Body).Decode(&result)
 		if result.Details["Password"] == "" {
 			t.Error("expected Password validation error")
 		}
@@ -131,7 +131,7 @@ func TestWriteValidationError(t *testing.T) {
 		writeValidationError(rec, err)
 
 		var result ErrorResponse
-		json.NewDecoder(rec.Body).Decode(&result)
+		_ = json.NewDecoder(rec.Body).Decode(&result)
 		if result.Error != "Validation failed" {
 			t.Errorf("error = %q, want %q", result.Error, "Validation failed")
 		}

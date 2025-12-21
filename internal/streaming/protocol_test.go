@@ -252,16 +252,16 @@ func TestCompleteStreamFlow(t *testing.T) {
 	}
 
 	// Simulate a complete streaming flow
-	sw.WriteStart("msg-123")
-	sw.WriteText("Hello")
-	sw.WriteText(" World")
-	sw.WriteText("!")
-	sw.WriteFinish("stop", &Usage{
+	_ = sw.WriteStart("msg-123")
+	_ = sw.WriteText("Hello")
+	_ = sw.WriteText(" World")
+	_ = sw.WriteText("!")
+	_ = sw.WriteFinish("stop", &Usage{
 		PromptTokens:     5,
 		CompletionTokens: 3,
 		TotalTokens:      8,
 	})
-	sw.WriteAnnotation(map[string]string{
+	_ = sw.WriteAnnotation(map[string]string{
 		"userMessageId": "user-msg-1",
 		"messageId":     "msg-123",
 	})
