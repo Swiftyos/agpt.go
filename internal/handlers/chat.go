@@ -5,13 +5,16 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/agpt-go/chatbot-api/internal/database"
 	"github.com/agpt-go/chatbot-api/internal/middleware"
 	"github.com/agpt-go/chatbot-api/internal/services"
 	"github.com/agpt-go/chatbot-api/internal/streaming"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type ChatHandler struct {
@@ -62,6 +65,41 @@ type ChatResponse struct {
 	AssistantMessage *MessageResponse `json:"assistant_message"`
 }
 
+// Helper functions for type conversions
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func formatTimestamp(ts pgtype.Timestamptz) string {
+	if !ts.Valid {
+		return ""
+	}
+	return ts.Time.Format(time.RFC3339)
+}
+
+func sessionToResponse(session *database.ChatSession) SessionResponse {
+	return SessionResponse{
+		ID:           session.ID.String(),
+		Title:        derefString(session.Title),
+		Model:        derefString(session.Model),
+		SystemPrompt: session.SystemPrompt,
+		CreatedAt:    formatTimestamp(session.CreatedAt),
+		UpdatedAt:    formatTimestamp(session.UpdatedAt),
+	}
+}
+
+func messageToResponse(msg *database.ChatMessage) MessageResponse {
+	return MessageResponse{
+		ID:        msg.ID.String(),
+		Role:      msg.Role,
+		Content:   msg.Content,
+		CreatedAt: formatTimestamp(msg.CreatedAt),
+	}
+}
+
 // CreateSession creates a new chat session
 func (h *ChatHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
@@ -86,14 +124,7 @@ func (h *ChatHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, SessionResponse{
-		ID:           session.ID.String(),
-		Title:        session.Title,
-		Model:        session.Model,
-		SystemPrompt: session.SystemPrompt,
-		CreatedAt:    session.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:    session.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-	})
+	writeJSON(w, http.StatusCreated, sessionToResponse(session))
 }
 
 // ListSessions returns all sessions for the authenticated user
@@ -126,14 +157,7 @@ func (h *ChatHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 	response := make([]SessionResponse, len(sessions))
 	for i, s := range sessions {
-		response[i] = SessionResponse{
-			ID:           s.ID.String(),
-			Title:        s.Title,
-			Model:        s.Model,
-			SystemPrompt: s.SystemPrompt,
-			CreatedAt:    s.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt:    s.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		}
+		response[i] = sessionToResponse(&s)
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -159,14 +183,7 @@ func (h *ChatHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, SessionResponse{
-		ID:           session.ID.String(),
-		Title:        session.Title,
-		Model:        session.Model,
-		SystemPrompt: session.SystemPrompt,
-		CreatedAt:    session.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:    session.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-	})
+	writeJSON(w, http.StatusOK, sessionToResponse(session))
 }
 
 // UpdateSession updates a session's title or system prompt
@@ -202,14 +219,7 @@ func (h *ChatHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, SessionResponse{
-		ID:           session.ID.String(),
-		Title:        session.Title,
-		Model:        session.Model,
-		SystemPrompt: session.SystemPrompt,
-		CreatedAt:    session.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:    session.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-	})
+	writeJSON(w, http.StatusOK, sessionToResponse(session))
 }
 
 // DeleteSession deletes a session and all its messages
@@ -263,12 +273,7 @@ func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 
 	response := make([]MessageResponse, len(messages))
 	for i, m := range messages {
-		response[i] = MessageResponse{
-			ID:        m.ID.String(),
-			Role:      m.Role,
-			Content:   m.Content,
-			CreatedAt: m.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		}
+		response[i] = messageToResponse(&m)
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -309,22 +314,14 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userMsgResp := messageToResponse(userMsg)
 	response := ChatResponse{
-		UserMessage: &MessageResponse{
-			ID:        userMsg.ID.String(),
-			Role:      userMsg.Role,
-			Content:   userMsg.Content,
-			CreatedAt: userMsg.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		},
+		UserMessage: &userMsgResp,
 	}
 
 	if assistantMsg != nil {
-		response.AssistantMessage = &MessageResponse{
-			ID:        assistantMsg.ID.String(),
-			Role:      assistantMsg.Role,
-			Content:   assistantMsg.Content,
-			CreatedAt: assistantMsg.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		}
+		assistantMsgResp := messageToResponse(assistantMsg)
+		response.AssistantMessage = &assistantMsgResp
 	}
 
 	writeJSON(w, http.StatusOK, response)

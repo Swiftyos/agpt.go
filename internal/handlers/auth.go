@@ -177,21 +177,11 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 
 func generateState() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
 
 func toUserResponse(user interface{}) *UserResponse {
-	// Type assertion for database.User
-	type dbUser interface {
-		GetID() interface{}
-		GetEmail() string
-		GetName() string
-		GetAvatarURL() *string
-		GetProvider() string
-		GetEmailVerified() bool
-	}
-
 	// Use reflection-free approach with struct
 	switch u := user.(type) {
 	case interface{ GetID() interface{} }:
