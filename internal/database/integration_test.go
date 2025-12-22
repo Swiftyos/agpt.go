@@ -14,6 +14,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/agpt-go/chatbot-api/internal/config"
 )
 
 // skipIfNoDatabase skips the test if DATABASE_URL is not set
@@ -24,6 +26,16 @@ func skipIfNoDatabase(t *testing.T) {
 	}
 }
 
+// getDatabaseConfig returns a DatabaseConfig parsed from DATABASE_URL
+func getDatabaseConfig(t *testing.T) config.DatabaseConfig {
+	t.Helper()
+	cfg, err := config.ParseDatabaseURL(os.Getenv("DATABASE_URL"))
+	if err != nil {
+		t.Fatalf("Failed to parse DATABASE_URL: %v", err)
+	}
+	return cfg
+}
+
 // TestIntegration_DatabaseConnection tests basic database connectivity
 func TestIntegration_DatabaseConnection(t *testing.T) {
 	skipIfNoDatabase(t)
@@ -31,7 +43,7 @@ func TestIntegration_DatabaseConnection(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	pool, err := NewPool(ctx, os.Getenv("DATABASE_URL"))
+	pool, err := NewPool(ctx, getDatabaseConfig(t))
 	if err != nil {
 		t.Fatalf("Failed to create pool: %v", err)
 	}
@@ -56,7 +68,7 @@ func TestIntegration_ConnectionPooling(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	pool, err := NewPool(ctx, os.Getenv("DATABASE_URL"))
+	pool, err := NewPool(ctx, getDatabaseConfig(t))
 	if err != nil {
 		t.Fatalf("Failed to create pool: %v", err)
 	}
@@ -95,7 +107,7 @@ func TestIntegration_TransactionSupport(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	pool, err := NewPool(ctx, os.Getenv("DATABASE_URL"))
+	pool, err := NewPool(ctx, getDatabaseConfig(t))
 	if err != nil {
 		t.Fatalf("Failed to create pool: %v", err)
 	}
@@ -129,7 +141,7 @@ func TestIntegration_ContextCancellation(t *testing.T) {
 	// Create a context that cancels immediately
 	ctx, cancel := context.WithCancel(context.Background())
 
-	pool, err := NewPool(ctx, os.Getenv("DATABASE_URL"))
+	pool, err := NewPool(ctx, getDatabaseConfig(t))
 	if err != nil {
 		t.Fatalf("Failed to create pool: %v", err)
 	}
@@ -153,7 +165,7 @@ func TestIntegration_PreparedStatements(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	pool, err := NewPool(ctx, os.Getenv("DATABASE_URL"))
+	pool, err := NewPool(ctx, getDatabaseConfig(t))
 	if err != nil {
 		t.Fatalf("Failed to create pool: %v", err)
 	}

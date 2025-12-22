@@ -157,6 +157,7 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.should_run == 'true' && github.event.inputs.skip_openai != 'true'
     runs-on: ubuntu-latest
+    environment: CI
     timeout-minutes: 15
 
     steps:

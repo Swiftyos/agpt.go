@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -59,6 +60,47 @@ func (d DatabaseConfig) ConnectionString() string {
 		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		d.User, d.Password, d.Host, d.Port, d.Name, d.SSLMode,
 	)
+}
+
+// ParseDatabaseURL parses a DATABASE_URL into a DatabaseConfig with default pool settings
+func ParseDatabaseURL(databaseURL string) (DatabaseConfig, error) {
+	// Parse the URL
+	u, err := url.Parse(databaseURL)
+	if err != nil {
+		return DatabaseConfig{}, fmt.Errorf("invalid database URL: %w", err)
+	}
+
+	password, _ := u.User.Password()
+	host := u.Hostname()
+	port := u.Port()
+	if port == "" {
+		port = "5432"
+	}
+
+	// Extract database name (remove leading /)
+	dbName := u.Path
+	if len(dbName) > 0 && dbName[0] == '/' {
+		dbName = dbName[1:]
+	}
+
+	// Extract sslmode from query params, default to "disable"
+	sslMode := u.Query().Get("sslmode")
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+
+	return DatabaseConfig{
+		Host:        host,
+		Port:        port,
+		User:        u.User.Username(),
+		Password:    password,
+		Name:        dbName,
+		SSLMode:     sslMode,
+		MaxConns:    25,
+		MinConns:    5,
+		MaxConnLife: 60 * time.Minute,
+		MaxConnIdle: 30 * time.Minute,
+	}, nil
 }
 
 func Load() (*Config, error) {
