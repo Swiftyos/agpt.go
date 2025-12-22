@@ -101,7 +101,18 @@ func messageToResponse(msg *database.ChatMessage) MessageResponse {
 	}
 }
 
-// CreateSession creates a new chat session
+// CreateSession godoc
+// @Summary Create a new chat session
+// @Description Create a new chat session for the authenticated user
+// @Tags Sessions
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body CreateSessionRequest false "Session options"
+// @Success 201 {object} SessionResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /sessions [post]
 func (h *ChatHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == uuid.Nil {
@@ -128,7 +139,18 @@ func (h *ChatHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, sessionToResponse(session))
 }
 
-// ListSessions returns all sessions for the authenticated user
+// ListSessions godoc
+// @Summary List chat sessions
+// @Description List all chat sessions for the authenticated user
+// @Tags Sessions
+// @Produce json
+// @Security BearerAuth
+// @Param limit query int false "Number of sessions (default: 20, max: 100)"
+// @Param offset query int false "Offset for pagination (default: 0)"
+// @Success 200 {array} SessionResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /sessions [get]
 func (h *ChatHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == uuid.Nil {
@@ -164,7 +186,18 @@ func (h *ChatHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// GetSession returns a specific session
+// GetSession godoc
+// @Summary Get a chat session
+// @Description Get details of a specific chat session
+// @Tags Sessions
+// @Produce json
+// @Security BearerAuth
+// @Param sessionID path string true "Session UUID"
+// @Success 200 {object} SessionResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /sessions/{sessionID} [get]
 func (h *ChatHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == uuid.Nil {
@@ -187,7 +220,20 @@ func (h *ChatHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sessionToResponse(session))
 }
 
-// UpdateSession updates a session's title or system prompt
+// UpdateSession godoc
+// @Summary Update a chat session
+// @Description Update the title or system prompt of a chat session
+// @Tags Sessions
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param sessionID path string true "Session UUID"
+// @Param request body UpdateSessionRequest true "Update fields"
+// @Success 200 {object} SessionResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /sessions/{sessionID} [patch]
 func (h *ChatHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == uuid.Nil {
@@ -223,7 +269,17 @@ func (h *ChatHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sessionToResponse(session))
 }
 
-// DeleteSession deletes a session and all its messages
+// DeleteSession godoc
+// @Summary Delete a chat session
+// @Description Delete a chat session and all its messages
+// @Tags Sessions
+// @Security BearerAuth
+// @Param sessionID path string true "Session UUID"
+// @Success 204 "Session deleted"
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /sessions/{sessionID} [delete]
 func (h *ChatHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == uuid.Nil {
@@ -245,7 +301,19 @@ func (h *ChatHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetMessages returns messages in a session with optional limit
+// GetMessages godoc
+// @Summary Get messages in a session
+// @Description Get all messages in a chat session
+// @Tags Messages
+// @Produce json
+// @Security BearerAuth
+// @Param sessionID path string true "Session UUID"
+// @Param limit query int false "Number of messages (default: 100, max: 500)"
+// @Success 200 {array} MessageResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /sessions/{sessionID}/messages [get]
 func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == uuid.Nil {
@@ -291,7 +359,21 @@ func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// SendMessage sends a message and returns the response (non-streaming)
+// SendMessage godoc
+// @Summary Send a message (non-streaming)
+// @Description Send a message to the chat session and get a response
+// @Tags Messages
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param sessionID path string true "Session UUID"
+// @Param request body SendMessageRequest true "Message content"
+// @Success 200 {object} ChatResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /sessions/{sessionID}/messages [post]
 func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == uuid.Nil {
@@ -339,8 +421,21 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// SendMessageStream sends a message and streams the response
-// Implements AI SDK Data Stream Protocol with tool calling support
+// SendMessageStream godoc
+// @Summary Send a message (streaming)
+// @Description Send a message and stream the response using Vercel AI SDK Data Stream Protocol
+// @Tags Messages
+// @Accept json
+// @Produce text/plain
+// @Security BearerAuth
+// @Param sessionID path string true "Session UUID"
+// @Param request body SendMessageRequest true "Message content"
+// @Success 200 {string} string "Stream of parts in format 'type:json\\n'"
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /sessions/{sessionID}/messages/stream [post]
 func (h *ChatHandler) SendMessageStream(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == uuid.Nil {
