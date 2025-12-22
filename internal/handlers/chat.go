@@ -421,7 +421,7 @@ func (h *ChatHandler) SendMessageStream(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		// Handle completed tool calls
+		// Handle completed tool calls - execute them and write results
 		for _, tc := range chunk.ToolCalls {
 			// Parse arguments to interface{} for proper JSON encoding
 			var args interface{}
@@ -430,6 +430,36 @@ func (h *ChatHandler) SendMessageStream(w http.ResponseWriter, r *http.Request) 
 			}
 
 			if err := sw.WriteToolCall(tc.ID, tc.Function.Name, args); err != nil {
+				return
+			}
+
+			// Execute the tool and write result
+			toolExecutor := h.chatService.GetToolExecutor()
+			result, err := toolExecutor.ExecuteToolCall(r.Context(), userID, services.ToolCall{
+				ID:   tc.ID,
+				Type: tc.Type,
+				Function: struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				}{
+					Name:      tc.Function.Name,
+					Arguments: tc.Function.Arguments,
+				},
+			})
+			if err != nil {
+				logging.Error("failed to execute tool", err, "tool", tc.Function.Name)
+				// Write error result
+				if err := sw.WriteToolResult(tc.ID, map[string]interface{}{
+					"success": false,
+					"error":   "Failed to execute tool: " + err.Error(),
+				}); err != nil {
+					return
+				}
+				continue
+			}
+
+			// Write successful tool result
+			if err := sw.WriteToolResult(tc.ID, result); err != nil {
 				return
 			}
 		}
