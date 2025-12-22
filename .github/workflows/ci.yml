@@ -42,7 +42,6 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.6
-          args: --timeout 30s
           skip-cache: false
 
       - name: Build and Test
