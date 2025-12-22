@@ -58,3 +58,25 @@ type User struct {
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
+
+type BusinessUnderstanding struct {
+	ID                 uuid.UUID          `json:"id"`
+	UserID             uuid.UUID          `json:"user_id"`
+	UserName           *string            `json:"user_name"`
+	JobTitle           *string            `json:"job_title"`
+	BusinessName       *string            `json:"business_name"`
+	Industry           *string            `json:"industry"`
+	BusinessSize       *string            `json:"business_size"`
+	UserRole           *string            `json:"user_role"`
+	KeyWorkflows       []byte             `json:"key_workflows"`
+	DailyActivities    []byte             `json:"daily_activities"`
+	PainPoints         []byte             `json:"pain_points"`
+	Bottlenecks        []byte             `json:"bottlenecks"`
+	ManualTasks        []byte             `json:"manual_tasks"`
+	AutomationGoals    []byte             `json:"automation_goals"`
+	CurrentSoftware    []byte             `json:"current_software"`
+	ExistingAutomation []byte             `json:"existing_automation"`
+	AdditionalNotes    *string            `json:"additional_notes"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
