@@ -81,10 +81,11 @@ func TestE2E_HealthCheck(t *testing.T) {
 // TestE2E_AuthFlow tests the complete authentication flow
 func TestE2E_AuthFlow(t *testing.T) {
 	// Test user registration
+	email := fmt.Sprintf("test_%d@example.com", time.Now().UnixNano())
 	registerPayload := map[string]string{
-		"username": fmt.Sprintf("testuser_%d", time.Now().UnixNano()),
+		"email":    email,
 		"password": "testpassword123",
-		"email":    fmt.Sprintf("test_%d@example.com", time.Now().UnixNano()),
+		"name":     "Test User",
 	}
 
 	body, _ := json.Marshal(registerPayload)
@@ -102,7 +103,7 @@ func TestE2E_AuthFlow(t *testing.T) {
 
 	// Test login
 	loginPayload := map[string]string{
-		"username": registerPayload["username"],
+		"email":    email,
 		"password": registerPayload["password"],
 	}
 
@@ -157,7 +158,7 @@ func TestE2E_UnauthorizedAccess(t *testing.T) {
 // TestE2E_InvalidCredentials tests login with wrong password
 func TestE2E_InvalidCredentials(t *testing.T) {
 	loginPayload := map[string]string{
-		"username": "nonexistent_user_12345",
+		"email":    "nonexistent@example.com",
 		"password": "wrongpassword",
 	}
 
