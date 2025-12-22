@@ -52,6 +52,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService)
 	chatHandler := handlers.NewChatHandler(chatService)
 	sessionHandler := handlers.NewSessionHandler(queries)
+	openapiHandler := handlers.NewOpenAPIHandler()
 
 	// Initialize middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService)
@@ -72,6 +73,9 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
+
+	// OpenAPI specification
+	r.Get("/openapi.json", openapiHandler.ServeSpec)
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
