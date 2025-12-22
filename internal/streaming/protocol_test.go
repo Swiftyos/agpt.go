@@ -227,16 +227,223 @@ func TestPartTypeConstants(t *testing.T) {
 		expected string
 	}{
 		{"PartTypeText", PartTypeText, "0"},
+		{"PartTypeFunctionCall", PartTypeFunctionCall, "1"},
 		{"PartTypeData", PartTypeData, "2"},
 		{"PartTypeError", PartTypeError, "3"},
+		{"PartTypeAssistantMsg", PartTypeAssistantMsg, "4"},
+		{"PartTypeAssistantCtrl", PartTypeAssistantCtrl, "5"},
+		{"PartTypeDataMessage", PartTypeDataMessage, "6"},
+		{"PartTypeToolCallDelta", PartTypeToolCallDelta, "7"},
 		{"PartTypeAnnotation", PartTypeAnnotation, "8"},
-		{"PartTypeFinishReason", PartTypeFinishReason, "d"},
+		{"PartTypeToolCall", PartTypeToolCall, "9"},
+		{"PartTypeToolResult", PartTypeToolResult, "a"},
+		{"PartTypeToolCallStart", PartTypeToolCallStart, "b"},
+		{"PartTypeToolCallArgDelta", PartTypeToolCallArgDelta, "c"},
+		{"PartTypeFinishMessage", PartTypeFinishMessage, "d"},
+		{"PartTypeFinishStep", PartTypeFinishStep, "e"},
 		{"PartTypeStart", PartTypeStart, "f"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.got != tt.expected {
+				t.Errorf("%s = %q, want %q", tt.name, tt.got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestStreamWriterWriteToolCall(t *testing.T) {
+	rec := httptest.NewRecorder()
+	w := &mockFlusher{ResponseRecorder: rec}
+	sw, _ := NewStreamWriter(w)
+
+	args := map[string]interface{}{
+		"location": "San Francisco",
+		"unit":     "celsius",
+	}
+	err := sw.WriteToolCall("call_123", "get_weather", args)
+	if err != nil {
+		t.Fatalf("WriteToolCall() error = %v", err)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "9:") {
+		t.Errorf("WriteToolCall() body = %q, want to contain tool call prefix '9:'", body)
+	}
+	if !strings.Contains(body, `"toolCallId":"call_123"`) {
+		t.Errorf("WriteToolCall() body = %q, want to contain toolCallId", body)
+	}
+	if !strings.Contains(body, `"toolName":"get_weather"`) {
+		t.Errorf("WriteToolCall() body = %q, want to contain toolName", body)
+	}
+	if !strings.Contains(body, `"location":"San Francisco"`) {
+		t.Errorf("WriteToolCall() body = %q, want to contain args", body)
+	}
+}
+
+func TestStreamWriterWriteToolResult(t *testing.T) {
+	rec := httptest.NewRecorder()
+	w := &mockFlusher{ResponseRecorder: rec}
+	sw, _ := NewStreamWriter(w)
+
+	result := map[string]interface{}{
+		"temperature": 22,
+		"condition":   "sunny",
+	}
+	err := sw.WriteToolResult("call_123", result)
+	if err != nil {
+		t.Fatalf("WriteToolResult() error = %v", err)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "a:") {
+		t.Errorf("WriteToolResult() body = %q, want to contain tool result prefix 'a:'", body)
+	}
+	if !strings.Contains(body, `"toolCallId":"call_123"`) {
+		t.Errorf("WriteToolResult() body = %q, want to contain toolCallId", body)
+	}
+	if !strings.Contains(body, `"temperature":22`) {
+		t.Errorf("WriteToolResult() body = %q, want to contain result data", body)
+	}
+}
+
+func TestStreamWriterWriteToolCallStart(t *testing.T) {
+	rec := httptest.NewRecorder()
+	w := &mockFlusher{ResponseRecorder: rec}
+	sw, _ := NewStreamWriter(w)
+
+	err := sw.WriteToolCallStart("call_456", "search_database")
+	if err != nil {
+		t.Fatalf("WriteToolCallStart() error = %v", err)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "b:") {
+		t.Errorf("WriteToolCallStart() body = %q, want to contain prefix 'b:'", body)
+	}
+	if !strings.Contains(body, `"toolCallId":"call_456"`) {
+		t.Errorf("WriteToolCallStart() body = %q, want to contain toolCallId", body)
+	}
+	if !strings.Contains(body, `"toolName":"search_database"`) {
+		t.Errorf("WriteToolCallStart() body = %q, want to contain toolName", body)
+	}
+}
+
+func TestStreamWriterWriteToolCallArgDelta(t *testing.T) {
+	rec := httptest.NewRecorder()
+	w := &mockFlusher{ResponseRecorder: rec}
+	sw, _ := NewStreamWriter(w)
+
+	err := sw.WriteToolCallArgDelta("call_456", `{"query": "test`)
+	if err != nil {
+		t.Fatalf("WriteToolCallArgDelta() error = %v", err)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "c:") {
+		t.Errorf("WriteToolCallArgDelta() body = %q, want to contain prefix 'c:'", body)
+	}
+	if !strings.Contains(body, `"toolCallId":"call_456"`) {
+		t.Errorf("WriteToolCallArgDelta() body = %q, want to contain toolCallId", body)
+	}
+	if !strings.Contains(body, `"argsTextDelta"`) {
+		t.Errorf("WriteToolCallArgDelta() body = %q, want to contain argsTextDelta", body)
+	}
+}
+
+func TestStreamWriterWriteFinishStep(t *testing.T) {
+	rec := httptest.NewRecorder()
+	w := &mockFlusher{ResponseRecorder: rec}
+	sw, _ := NewStreamWriter(w)
+
+	usage := &Usage{
+		PromptTokens:     100,
+		CompletionTokens: 50,
+		TotalTokens:      150,
+	}
+	err := sw.WriteFinishStep(FinishReasonToolCalls, usage, true)
+	if err != nil {
+		t.Fatalf("WriteFinishStep() error = %v", err)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "e:") {
+		t.Errorf("WriteFinishStep() body = %q, want to contain prefix 'e:'", body)
+	}
+	if !strings.Contains(body, `"finishReason":"tool-calls"`) {
+		t.Errorf("WriteFinishStep() body = %q, want to contain finishReason", body)
+	}
+	if !strings.Contains(body, `"isContinued":true`) {
+		t.Errorf("WriteFinishStep() body = %q, want to contain isContinued", body)
+	}
+	if !strings.Contains(body, `"promptTokens":100`) {
+		t.Errorf("WriteFinishStep() body = %q, want to contain usage", body)
+	}
+}
+
+func TestStreamWriterWriteFinishMessage(t *testing.T) {
+	rec := httptest.NewRecorder()
+	w := &mockFlusher{ResponseRecorder: rec}
+	sw, _ := NewStreamWriter(w)
+
+	usage := &Usage{
+		PromptTokens:     100,
+		CompletionTokens: 50,
+		TotalTokens:      150,
+	}
+	err := sw.WriteFinishMessage(FinishReasonStop, usage)
+	if err != nil {
+		t.Fatalf("WriteFinishMessage() error = %v", err)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "d:") {
+		t.Errorf("WriteFinishMessage() body = %q, want to contain prefix 'd:'", body)
+	}
+	if !strings.Contains(body, `"finishReason":"stop"`) {
+		t.Errorf("WriteFinishMessage() body = %q, want to contain finishReason", body)
+	}
+}
+
+func TestFinishReasonTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		got      FinishReasonType
+		expected string
+	}{
+		{"FinishReasonStop", FinishReasonStop, "stop"},
+		{"FinishReasonLength", FinishReasonLength, "length"},
+		{"FinishReasonContentFilter", FinishReasonContentFilter, "content-filter"},
+		{"FinishReasonToolCalls", FinishReasonToolCalls, "tool-calls"},
+		{"FinishReasonError", FinishReasonError, "error"},
+		{"FinishReasonOther", FinishReasonOther, "other"},
+		{"FinishReasonUnknown", FinishReasonUnknown, "unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if string(tt.got) != tt.expected {
+				t.Errorf("%s = %q, want %q", tt.name, tt.got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestStepTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		got      StepType
+		expected string
+	}{
+		{"StepTypeInitial", StepTypeInitial, "initial"},
+		{"StepTypeContinue", StepTypeContinue, "continue"},
+		{"StepTypeToolResult", StepTypeToolResult, "tool-result"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if string(tt.got) != tt.expected {
 				t.Errorf("%s = %q, want %q", tt.name, tt.got, tt.expected)
 			}
 		})
@@ -256,7 +463,12 @@ func TestCompleteStreamFlow(t *testing.T) {
 	_ = sw.WriteText("Hello")
 	_ = sw.WriteText(" World")
 	_ = sw.WriteText("!")
-	_ = sw.WriteFinish("stop", &Usage{
+	_ = sw.WriteFinishStep(FinishReasonStop, &Usage{
+		PromptTokens:     5,
+		CompletionTokens: 3,
+		TotalTokens:      8,
+	}, false)
+	_ = sw.WriteFinishMessage(FinishReasonStop, &Usage{
 		PromptTokens:     5,
 		CompletionTokens: 3,
 		TotalTokens:      8,
@@ -275,12 +487,108 @@ func TestCompleteStreamFlow(t *testing.T) {
 		"0:Hello",
 		"0: World",
 		"0:!",
+		"e:", // finish step
+		"d:", // finish message
 		`"finishReason":"stop"`,
 	}
 
 	for _, part := range expectedParts {
 		if !strings.Contains(body, part) {
 			t.Errorf("body missing expected part: %q", part)
+		}
+	}
+}
+
+func TestCompleteToolCallStreamFlow(t *testing.T) {
+	rec := httptest.NewRecorder()
+	w := &mockFlusher{ResponseRecorder: rec}
+	sw, err := NewStreamWriter(w)
+	if err != nil {
+		t.Fatalf("NewStreamWriter() error = %v", err)
+	}
+
+	// Simulate a complete tool calling flow
+	// Step 1: Initial message with tool call
+	_ = sw.WriteStart("msg-456")
+	_ = sw.WriteText("Let me check the weather for you.")
+
+	// Stream tool call start
+	_ = sw.WriteToolCallStart("call_abc123", "get_weather")
+
+	// Stream tool call arguments incrementally
+	_ = sw.WriteToolCallArgDelta("call_abc123", `{"location":`)
+	_ = sw.WriteToolCallArgDelta("call_abc123", `"San Francisco"`)
+	_ = sw.WriteToolCallArgDelta("call_abc123", `}`)
+
+	// Write complete tool call
+	_ = sw.WriteToolCall("call_abc123", "get_weather", map[string]interface{}{
+		"location": "San Francisco",
+	})
+
+	// Finish step with tool_calls reason (isContinued = true)
+	_ = sw.WriteFinishStep(FinishReasonToolCalls, &Usage{
+		PromptTokens:     20,
+		CompletionTokens: 10,
+		TotalTokens:      30,
+	}, true)
+
+	// Step 2: Tool result comes back
+	_ = sw.WriteToolResult("call_abc123", map[string]interface{}{
+		"temperature": 22,
+		"condition":   "sunny",
+	})
+
+	// Step 3: Continue with response after tool result
+	_ = sw.WriteText("The weather in San Francisco is sunny with a temperature of 22°C.")
+
+	// Finish step (no more tool calls)
+	_ = sw.WriteFinishStep(FinishReasonStop, &Usage{
+		PromptTokens:     50,
+		CompletionTokens: 20,
+		TotalTokens:      70,
+	}, false)
+
+	// Final finish message
+	_ = sw.WriteFinishMessage(FinishReasonStop, &Usage{
+		PromptTokens:     50,
+		CompletionTokens: 20,
+		TotalTokens:      70,
+	})
+
+	_ = sw.WriteAnnotation(map[string]string{
+		"userMessageId": "user-msg-2",
+		"messageId":     "msg-456",
+	})
+	sw.Close()
+
+	body := rec.Body.String()
+
+	// Verify all parts are present
+	expectedParts := []struct {
+		prefix string
+		desc   string
+	}{
+		{`f:{"messageId":"msg-456"}`, "message start"},
+		{"0:Let me check the weather for you.", "initial text"},
+		{"b:", "tool call start"},
+		{`"toolCallId":"call_abc123"`, "tool call ID"},
+		{`"toolName":"get_weather"`, "tool name"},
+		{"c:", "tool call arg delta"},
+		{"9:", "complete tool call"},
+		{`e:`, "finish step"},
+		{`"finishReason":"tool-calls"`, "tool-calls finish reason"},
+		{`"isContinued":true`, "isContinued flag"},
+		{"a:", "tool result"},
+		{`"temperature":22`, "tool result data"},
+		{"0:The weather in San Francisco", "response text"},
+		{`"finishReason":"stop"`, "stop finish reason"},
+		{"d:", "finish message"},
+		{"8:", "annotation"},
+	}
+
+	for _, exp := range expectedParts {
+		if !strings.Contains(body, exp.prefix) {
+			t.Errorf("body missing %s: %q", exp.desc, exp.prefix)
 		}
 	}
 }

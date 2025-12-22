@@ -11,13 +11,46 @@ import (
 // See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
 
 // Stream part types as per AI SDK specification
+// See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
 const (
-	PartTypeText         = "0" // Text part
-	PartTypeData         = "2" // Data array
-	PartTypeError        = "3" // Error
-	PartTypeAnnotation   = "8" // Message annotation
-	PartTypeFinishReason = "d" // Finish reason with usage
-	PartTypeStart        = "f" // Start with message ID
+	PartTypeText             = "0" // Text delta
+	PartTypeFunctionCall     = "1" // Function call (legacy)
+	PartTypeData             = "2" // Data array
+	PartTypeError            = "3" // Error message
+	PartTypeAssistantMsg     = "4" // Assistant control data
+	PartTypeAssistantCtrl    = "5" // Assistant message
+	PartTypeDataMessage      = "6" // Structured data message
+	PartTypeToolCallDelta    = "7" // Tool call streaming delta (legacy)
+	PartTypeAnnotation       = "8" // Message annotation
+	PartTypeToolCall         = "9" // Tool call invocation
+	PartTypeToolResult       = "a" // Tool call result
+	PartTypeToolCallStart    = "b" // Tool call streaming start
+	PartTypeToolCallArgDelta = "c" // Tool call argument delta
+	PartTypeFinishMessage    = "d" // Finish message (final)
+	PartTypeFinishStep       = "e" // Finish step (per LLM call)
+	PartTypeStart            = "f" // Message start with ID
+)
+
+// StepType represents the type of step in multi-step flows
+type StepType string
+
+const (
+	StepTypeInitial    StepType = "initial"
+	StepTypeContinue   StepType = "continue"
+	StepTypeToolResult StepType = "tool-result"
+)
+
+// FinishReasonType represents why the LLM stopped generating
+type FinishReasonType string
+
+const (
+	FinishReasonStop          FinishReasonType = "stop"
+	FinishReasonLength        FinishReasonType = "length"
+	FinishReasonContentFilter FinishReasonType = "content-filter"
+	FinishReasonToolCalls     FinishReasonType = "tool-calls"
+	FinishReasonError         FinishReasonType = "error"
+	FinishReasonOther         FinishReasonType = "other"
+	FinishReasonUnknown       FinishReasonType = "unknown"
 )
 
 // StreamWriter handles writing AI SDK compatible stream responses
@@ -71,12 +104,6 @@ func (sw *StreamWriter) WriteAnnotation(annotation interface{}) error {
 	return sw.writePart(PartTypeAnnotation, []interface{}{annotation})
 }
 
-// FinishReason represents the completion reason and usage stats
-type FinishReason struct {
-	FinishReason string `json:"finishReason"`
-	Usage        *Usage `json:"usage,omitempty"`
-}
-
 // Usage represents token usage statistics
 type Usage struct {
 	PromptTokens     int `json:"promptTokens"`
@@ -84,13 +111,108 @@ type Usage struct {
 	TotalTokens      int `json:"totalTokens"`
 }
 
-// WriteFinish writes the finish message with reason and usage
-func (sw *StreamWriter) WriteFinish(reason string, usage *Usage) error {
-	data := FinishReason{
+// FinishStepData represents the finish step payload (type "e")
+type FinishStepData struct {
+	FinishReason FinishReasonType `json:"finishReason"`
+	Usage        *Usage           `json:"usage,omitempty"`
+	IsContinued  bool             `json:"isContinued,omitempty"`
+}
+
+// FinishMessageData represents the finish message payload (type "d")
+type FinishMessageData struct {
+	FinishReason FinishReasonType `json:"finishReason"`
+	Usage        *Usage           `json:"usage,omitempty"`
+}
+
+// ToolCall represents a tool call invocation (type "9")
+type ToolCall struct {
+	ToolCallID string      `json:"toolCallId"`
+	ToolName   string      `json:"toolName"`
+	Args       interface{} `json:"args"`
+}
+
+// ToolResult represents a tool call result (type "a")
+type ToolResult struct {
+	ToolCallID string      `json:"toolCallId"`
+	Result     interface{} `json:"result"`
+}
+
+// ToolCallStart represents the start of streaming tool call (type "b")
+type ToolCallStart struct {
+	ToolCallID string `json:"toolCallId"`
+	ToolName   string `json:"toolName"`
+}
+
+// ToolCallArgDelta represents incremental tool call arguments (type "c")
+type ToolCallArgDelta struct {
+	ToolCallID    string `json:"toolCallId"`
+	ArgsTextDelta string `json:"argsTextDelta"`
+}
+
+// WriteToolCall writes a tool call invocation (type "9")
+func (sw *StreamWriter) WriteToolCall(toolCallID, toolName string, args interface{}) error {
+	data := ToolCall{
+		ToolCallID: toolCallID,
+		ToolName:   toolName,
+		Args:       args,
+	}
+	return sw.writePart(PartTypeToolCall, data)
+}
+
+// WriteToolResult writes a tool call result (type "a")
+func (sw *StreamWriter) WriteToolResult(toolCallID string, result interface{}) error {
+	data := ToolResult{
+		ToolCallID: toolCallID,
+		Result:     result,
+	}
+	return sw.writePart(PartTypeToolResult, data)
+}
+
+// WriteToolCallStart writes the start of a streaming tool call (type "b")
+func (sw *StreamWriter) WriteToolCallStart(toolCallID, toolName string) error {
+	data := ToolCallStart{
+		ToolCallID: toolCallID,
+		ToolName:   toolName,
+	}
+	return sw.writePart(PartTypeToolCallStart, data)
+}
+
+// WriteToolCallArgDelta writes incremental tool call arguments (type "c")
+func (sw *StreamWriter) WriteToolCallArgDelta(toolCallID, argsDelta string) error {
+	data := ToolCallArgDelta{
+		ToolCallID:    toolCallID,
+		ArgsTextDelta: argsDelta,
+	}
+	return sw.writePart(PartTypeToolCallArgDelta, data)
+}
+
+// WriteFinishStep writes a finish step part (type "e") - used per LLM call
+func (sw *StreamWriter) WriteFinishStep(reason FinishReasonType, usage *Usage, isContinued bool) error {
+	data := FinishStepData{
+		FinishReason: reason,
+		Usage:        usage,
+		IsContinued:  isContinued,
+	}
+	return sw.writePart(PartTypeFinishStep, data)
+}
+
+// WriteFinishMessage writes the final finish message (type "d")
+func (sw *StreamWriter) WriteFinishMessage(reason FinishReasonType, usage *Usage) error {
+	data := FinishMessageData{
 		FinishReason: reason,
 		Usage:        usage,
 	}
-	return sw.writePart(PartTypeFinishReason, data)
+	return sw.writePart(PartTypeFinishMessage, data)
+}
+
+// WriteFinish writes the finish message with reason and usage (alias for WriteFinishMessage)
+// Deprecated: Use WriteFinishMessage or WriteFinishStep for proper protocol compliance
+func (sw *StreamWriter) WriteFinish(reason string, usage *Usage) error {
+	data := FinishMessageData{
+		FinishReason: FinishReasonType(reason),
+		Usage:        usage,
+	}
+	return sw.writePart(PartTypeFinishMessage, data)
 }
 
 // Close flushes any remaining data
