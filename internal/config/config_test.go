@@ -108,18 +108,14 @@ func TestGetEnvAsInt(t *testing.T) {
 
 func TestLoad(t *testing.T) {
 	// Clear any pre-existing env vars that might override defaults
-	os.Unsetenv("OPENAI_MODEL")
-	os.Unsetenv("PORT")
-	os.Unsetenv("ENVIRONMENT")
-	os.Unsetenv("DB_HOST")
+	_ = os.Unsetenv("OPENAI_MODEL")
+	_ = os.Unsetenv("PORT")
+	_ = os.Unsetenv("ENVIRONMENT")
+	_ = os.Unsetenv("DB_HOST")
 
-	// Set required env vars
-	os.Setenv("JWT_SECRET", "test-jwt-secret")
-	os.Setenv("OPENAI_API_KEY", "test-openai-key")
-	defer func() {
-		os.Unsetenv("JWT_SECRET")
-		os.Unsetenv("OPENAI_API_KEY")
-	}()
+	// Set required env vars (t.Setenv auto-cleans up after test)
+	t.Setenv("JWT_SECRET", "test-jwt-secret")
+	t.Setenv("OPENAI_API_KEY", "test-openai-key")
 
 	cfg, err := Load()
 	if err != nil {
@@ -149,24 +145,14 @@ func TestLoad(t *testing.T) {
 }
 
 func TestLoadWithCustomValues(t *testing.T) {
-	// Set custom env vars
-	os.Setenv("JWT_SECRET", "custom-secret")
-	os.Setenv("OPENAI_API_KEY", "custom-key")
-	os.Setenv("PORT", "9000")
-	os.Setenv("ENVIRONMENT", "production")
-	os.Setenv("DB_HOST", "db.example.com")
-	os.Setenv("DB_MAX_CONNS", "50")
-	os.Setenv("OPENAI_MODEL", "gpt-4-turbo")
-
-	defer func() {
-		os.Unsetenv("JWT_SECRET")
-		os.Unsetenv("OPENAI_API_KEY")
-		os.Unsetenv("PORT")
-		os.Unsetenv("ENVIRONMENT")
-		os.Unsetenv("DB_HOST")
-		os.Unsetenv("DB_MAX_CONNS")
-		os.Unsetenv("OPENAI_MODEL")
-	}()
+	// Set custom env vars (t.Setenv auto-cleans up after test)
+	t.Setenv("JWT_SECRET", "custom-secret")
+	t.Setenv("OPENAI_API_KEY", "custom-key")
+	t.Setenv("PORT", "9000")
+	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("DB_HOST", "db.example.com")
+	t.Setenv("DB_MAX_CONNS", "50")
+	t.Setenv("OPENAI_MODEL", "gpt-4-turbo")
 
 	cfg, err := Load()
 	if err != nil {
@@ -196,8 +182,8 @@ func TestLoadWithCustomValues(t *testing.T) {
 
 func TestLoadMissingRequired(t *testing.T) {
 	// Ensure required vars are not set
-	os.Unsetenv("JWT_SECRET")
-	os.Unsetenv("OPENAI_API_KEY")
+	_ = os.Unsetenv("JWT_SECRET")
+	_ = os.Unsetenv("OPENAI_API_KEY")
 
 	_, err := Load()
 	if err == nil {
