@@ -1,0 +1,643 @@
+basePath: /api/v1
+definitions:
+  github_com_agpt-go_chatbot-api_internal_services.TokenPair:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      token_type:
+        type: string
+    type: object
+  internal_handlers.AuthResponse:
+    properties:
+      tokens:
+        $ref: '#/definitions/github_com_agpt-go_chatbot-api_internal_services.TokenPair'
+      user:
+        $ref: '#/definitions/internal_handlers.UserResponse'
+    type: object
+  internal_handlers.ChatResponse:
+    properties:
+      assistant_message:
+        $ref: '#/definitions/internal_handlers.MessageResponse'
+      user_message:
+        $ref: '#/definitions/internal_handlers.MessageResponse'
+    type: object
+  internal_handlers.CreateSessionRequest:
+    properties:
+      model:
+        type: string
+      system_prompt:
+        type: string
+      title:
+        type: string
+    type: object
+  internal_handlers.ErrorResponse:
+    properties:
+      details:
+        additionalProperties:
+          type: string
+        type: object
+      error:
+        type: string
+    type: object
+  internal_handlers.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  internal_handlers.MessageResponse:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      role:
+        type: string
+    type: object
+  internal_handlers.RefreshRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  internal_handlers.RegisterRequest:
+    properties:
+      email:
+        type: string
+      name:
+        minLength: 2
+        type: string
+      password:
+        minLength: 8
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  internal_handlers.SendMessageRequest:
+    properties:
+      content:
+        type: string
+    required:
+    - content
+    type: object
+  internal_handlers.SessionResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      model:
+        type: string
+      system_prompt:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  internal_handlers.UpdateSessionRequest:
+    properties:
+      system_prompt:
+        type: string
+      title:
+        type: string
+    type: object
+  internal_handlers.UserResponse:
+    properties:
+      avatar_url:
+        type: string
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      id:
+        type: string
+      name:
+        type: string
+      provider:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    name: AGPT Team
+  description: |-
+    A Go backend API for a ChatGPT-like chatbot application with Next.js frontend integration.
+    Features include user authentication, chat sessions, streaming responses, and AI-powered tools.
+  license:
+    name: MIT
+  title: AGPT Chatbot API
+  version: "1.0"
+paths:
+  /auth/google:
+    get:
+      description: Redirect to Google OAuth consent screen
+      responses:
+        "307":
+          description: Redirect to Google OAuth
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: Initiate Google OAuth
+      tags:
+      - Authentication
+  /auth/google/callback:
+    get:
+      description: Handle Google OAuth callback and create/login user
+      parameters:
+      - description: Authorization code from Google
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: CSRF protection state parameter
+        in: query
+        name: state
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: Google OAuth callback
+      tags:
+      - Authentication
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user with email and password
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: Login user
+      tags:
+      - Authentication
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Revoke the refresh token to log out
+      parameters:
+      - description: Refresh token to revoke
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: Logout user
+      tags:
+      - Authentication
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Get a new access token using a valid refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_agpt-go_chatbot-api_internal_services.TokenPair'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: Refresh access token
+      tags:
+      - Authentication
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user account with email and password
+      parameters:
+      - description: Registration details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_handlers.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: Register a new user
+      tags:
+      - Authentication
+  /me:
+    get:
+      description: Get the authenticated user's profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.UserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - User
+  /sessions:
+    get:
+      description: List all chat sessions for the authenticated user
+      parameters:
+      - description: 'Number of sessions (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      - description: 'Offset for pagination (default: 0)'
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/internal_handlers.SessionResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List chat sessions
+      tags:
+      - Sessions
+    post:
+      consumes:
+      - application/json
+      description: Create a new chat session for the authenticated user
+      parameters:
+      - description: Session options
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/internal_handlers.CreateSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_handlers.SessionResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new chat session
+      tags:
+      - Sessions
+  /sessions/{sessionID}:
+    delete:
+      description: Delete a chat session and all its messages
+      parameters:
+      - description: Session UUID
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Session deleted
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a chat session
+      tags:
+      - Sessions
+    get:
+      description: Get details of a specific chat session
+      parameters:
+      - description: Session UUID
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.SessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a chat session
+      tags:
+      - Sessions
+    patch:
+      consumes:
+      - application/json
+      description: Update the title or system prompt of a chat session
+      parameters:
+      - description: Session UUID
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      - description: Update fields
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.UpdateSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.SessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a chat session
+      tags:
+      - Sessions
+  /sessions/{sessionID}/messages:
+    get:
+      description: Get all messages in a chat session
+      parameters:
+      - description: Session UUID
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      - description: 'Number of messages (default: 100, max: 500)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/internal_handlers.MessageResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get messages in a session
+      tags:
+      - Messages
+    post:
+      consumes:
+      - application/json
+      description: Send a message to the chat session and get a response
+      parameters:
+      - description: Session UUID
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      - description: Message content
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.SendMessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.ChatResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send a message (non-streaming)
+      tags:
+      - Messages
+  /sessions/{sessionID}/messages/stream:
+    post:
+      consumes:
+      - application/json
+      description: Send a message and stream the response using Vercel AI SDK Data
+        Stream Protocol
+      parameters:
+      - description: Session UUID
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      - description: Message content
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.SendMessageRequest'
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Stream of parts in format 'type:json\\n'
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send a message (streaming)
+      tags:
+      - Messages
+securityDefinitions:
+  BearerAuth:
+    description: 'JWT access token. Format: "Bearer {token}"'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

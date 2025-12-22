@@ -11,13 +11,31 @@ import (
 
 	"github.com/agpt-go/chatbot-api/internal/config"
 	"github.com/agpt-go/chatbot-api/internal/database"
+	_ "github.com/agpt-go/chatbot-api/internal/docs" // Swagger docs
 	"github.com/agpt-go/chatbot-api/internal/handlers"
 	"github.com/agpt-go/chatbot-api/internal/logging"
 	"github.com/agpt-go/chatbot-api/internal/middleware"
 	"github.com/agpt-go/chatbot-api/internal/services"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
+
+// @title AGPT Chatbot API
+// @version 1.0
+// @description A Go backend API for a ChatGPT-like chatbot application with Next.js frontend integration.
+// @description Features include user authentication, chat sessions, streaming responses, and AI-powered tools.
+
+// @contact.name AGPT Team
+// @license.name MIT
+
+// @host localhost:8080
+// @BasePath /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description JWT access token. Format: "Bearer {token}"
 
 func main() {
 	// Load configuration
@@ -73,6 +91,11 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
+
+	// Swagger documentation
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+	))
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
