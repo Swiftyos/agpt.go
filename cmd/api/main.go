@@ -74,11 +74,11 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// OpenAPI specification
-	r.Get("/openapi.json", openapiHandler.ServeSpec)
-
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
+		// OpenAPI specification (public)
+		r.Get("/openapi.json", openapiHandler.ServeSpec)
+
 		// Auth routes (public)
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/register", authHandler.Register)

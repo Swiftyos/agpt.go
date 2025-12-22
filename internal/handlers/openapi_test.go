@@ -11,7 +11,7 @@ func TestOpenAPIHandler_ServeSpec(t *testing.T) {
 	handler := NewOpenAPIHandler()
 
 	t.Run("returns OpenAPI spec", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/openapi.json", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeSpec(rec, req)
@@ -47,7 +47,7 @@ func TestOpenAPIHandler_ServeSpec(t *testing.T) {
 	})
 
 	t.Run("contains expected endpoints", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/openapi.json", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeSpec(rec, req)
@@ -83,7 +83,7 @@ func TestOpenAPIHandler_ServeSpec(t *testing.T) {
 	})
 
 	t.Run("has correct OpenAPI version", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/openapi.json", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeSpec(rec, req)
@@ -104,7 +104,7 @@ func TestOpenAPIHandler_ServeSpec(t *testing.T) {
 	})
 
 	t.Run("has security scheme defined", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/openapi.json", nil)
 		rec := httptest.NewRecorder()
 
 		handler.ServeSpec(rec, req)
