@@ -39,9 +39,9 @@ jobs:
 
       # Use golangci-lint action with built-in caching (faster than curl install)
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.63.4
+          version: v2.6
           args: --timeout 30s
           skip-cache: false
 
