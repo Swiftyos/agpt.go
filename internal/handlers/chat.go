@@ -340,7 +340,7 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 // SendMessageStream sends a message and streams the response
-// Implements AI SDK Data Stream Protocol
+// Implements AI SDK Data Stream Protocol with tool calling support
 func (h *ChatHandler) SendMessageStream(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == uuid.Nil {
@@ -389,9 +389,13 @@ func (h *ChatHandler) SendMessageStream(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Track tool call streaming state
+	streamedToolCalls := make(map[int]bool) // Track which tool calls have had their start written
+
 	// Stream response
 	var fullContent strings.Builder
 	for chunk := range chunks {
+		// Handle text content
 		if chunk.Content != "" {
 			fullContent.WriteString(chunk.Content)
 			if err := sw.WriteText(chunk.Content); err != nil {
@@ -399,10 +403,78 @@ func (h *ChatHandler) SendMessageStream(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		if chunk.Done {
-			// Write finish reason
-			if err := sw.WriteFinish(chunk.FinishReason, nil); err != nil {
+		// Handle tool call deltas (streaming tool call arguments)
+		for _, delta := range chunk.ToolCallDeltas {
+			// Write tool call start if this is the first delta for this tool call
+			if delta.ID != "" && delta.Name != "" && !streamedToolCalls[delta.Index] {
+				streamedToolCalls[delta.Index] = true
+				if err := sw.WriteToolCallStart(delta.ID, delta.Name); err != nil {
+					return
+				}
+			}
+
+			// Write argument delta if present
+			if delta.ArgDelta != "" {
+				if err := sw.WriteToolCallArgDelta(delta.ID, delta.ArgDelta); err != nil {
+					return
+				}
+			}
+		}
+
+		// Handle completed tool calls
+		for _, tc := range chunk.ToolCalls {
+			// Parse arguments to interface{} for proper JSON encoding
+			var args interface{}
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+				args = tc.Function.Arguments // Fallback to string
+			}
+
+			if err := sw.WriteToolCall(tc.ID, tc.Function.Name, args); err != nil {
 				return
+			}
+		}
+
+		if chunk.Done {
+			// Determine finish reason type
+			finishReason := streaming.FinishReasonStop
+			switch chunk.FinishReason {
+			case "stop":
+				finishReason = streaming.FinishReasonStop
+			case "length":
+				finishReason = streaming.FinishReasonLength
+			case "tool_calls":
+				finishReason = streaming.FinishReasonToolCalls
+			case "content_filter":
+				finishReason = streaming.FinishReasonContentFilter
+			case "error":
+				finishReason = streaming.FinishReasonError
+			default:
+				if chunk.FinishReason != "" {
+					finishReason = streaming.FinishReasonType(chunk.FinishReason)
+				}
+			}
+
+			// Convert usage if available
+			var usage *streaming.Usage
+			if chunk.Usage != nil {
+				usage = &streaming.Usage{
+					PromptTokens:     chunk.Usage.PromptTokens,
+					CompletionTokens: chunk.Usage.CompletionTokens,
+					TotalTokens:      chunk.Usage.TotalTokens,
+				}
+			}
+
+			// Write finish step (per LLM call)
+			isContinued := finishReason == streaming.FinishReasonToolCalls
+			if err := sw.WriteFinishStep(finishReason, usage, isContinued); err != nil {
+				return
+			}
+
+			// If not continuing (no tool calls), write final finish message
+			if !isContinued {
+				if err := sw.WriteFinishMessage(finishReason, usage); err != nil {
+					return
+				}
 			}
 			break
 		}
