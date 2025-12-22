@@ -73,8 +73,7 @@ func TestConfigValidate(t *testing.T) {
 
 func TestGetEnv(t *testing.T) {
 	// Test with existing env var
-	os.Setenv("TEST_VAR", "test-value")
-	defer os.Unsetenv("TEST_VAR")
+	t.Setenv("TEST_VAR", "test-value")
 
 	if got := getEnv("TEST_VAR", "default"); got != "test-value" {
 		t.Errorf("getEnv() = %q, want %q", got, "test-value")
@@ -88,16 +87,14 @@ func TestGetEnv(t *testing.T) {
 
 func TestGetEnvAsInt(t *testing.T) {
 	// Test with valid int
-	os.Setenv("TEST_INT", "42")
-	defer os.Unsetenv("TEST_INT")
+	t.Setenv("TEST_INT", "42")
 
 	if got := getEnvAsInt("TEST_INT", 0); got != 42 {
 		t.Errorf("getEnvAsInt() = %d, want %d", got, 42)
 	}
 
 	// Test with invalid int
-	os.Setenv("TEST_INVALID", "not-a-number")
-	defer os.Unsetenv("TEST_INVALID")
+	t.Setenv("TEST_INVALID", "not-a-number")
 
 	if got := getEnvAsInt("TEST_INVALID", 10); got != 10 {
 		t.Errorf("getEnvAsInt() = %d, want %d", got, 10)

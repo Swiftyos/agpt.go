@@ -215,7 +215,7 @@ func (s *LLMService) ChatStreamWithTools(ctx context.Context, messages []ChatMes
 
 	go func() {
 		defer close(chunks)
-		defer stream.Close()
+		defer func() { _ = stream.Close() }()
 
 		// toolCalls accumulates streaming tool call data (goroutine-local, no sync needed)
 		toolCalls := make(map[int]*toolCallAccumulator)
