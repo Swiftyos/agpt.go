@@ -110,6 +110,12 @@ func TestGetEnvAsInt(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
+	// Clear any pre-existing env vars that might override defaults
+	os.Unsetenv("OPENAI_MODEL")
+	os.Unsetenv("PORT")
+	os.Unsetenv("ENVIRONMENT")
+	os.Unsetenv("DB_HOST")
+
 	// Set required env vars
 	os.Setenv("JWT_SECRET", "test-jwt-secret")
 	os.Setenv("OPENAI_API_KEY", "test-openai-key")
@@ -140,8 +146,8 @@ func TestLoad(t *testing.T) {
 		t.Errorf("JWT.AccessExpiresIn = %v, want %v", cfg.JWT.AccessExpiresIn, 15*time.Minute)
 	}
 
-	if cfg.OpenAI.Model != "gpt-4o" {
-		t.Errorf("OpenAI.Model = %q, want %q", cfg.OpenAI.Model, "gpt-4o")
+	if cfg.OpenAI.Model != "gpt-5-mini-2025-08-07" {
+		t.Errorf("OpenAI.Model = %q, want %q", cfg.OpenAI.Model, "gpt-5-mini-2025-08-07")
 	}
 }
 

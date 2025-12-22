@@ -138,7 +138,7 @@ func Load() (*Config, error) {
 		},
 		OpenAI: OpenAIConfig{
 			APIKey: getEnv("OPENAI_API_KEY", ""),
-			Model:  getEnv("OPENAI_MODEL", "gpt-4o"),
+			Model:  getEnv("OPENAI_MODEL", "gpt-5-mini-2025-08-07"),
 		},
 	}
 
