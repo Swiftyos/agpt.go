@@ -1,0 +1,341 @@
+# Nightly End-to-End Testing Workflow
+#
+# Based on expert recommendations from Dave Farley & Martin Fowler:
+# - "Deploy software into production every night" - Martin Fowler
+# - Expensive tests (E2E, integration, race detection) run on schedule
+# - Full external service integration (OpenAI API, PostgreSQL)
+# - Matrix testing across Go versions
+#
+# This workflow runs:
+# 1. Full integration tests with real OpenAI API
+# 2. Race condition detection (2-10x overhead, not suitable for CI)
+# 3. Database integration tests with PostgreSQL
+# 4. Cross-version compatibility testing
+#
+# See: https://martinfowler.com/bliki/ContinuousDelivery.html
+# See: https://continuousdelivery.com/
+
+name: Nightly E2E Tests
+
+on:
+  # Run nightly at 2 AM UTC (recommended time for nightly builds)
+  schedule:
+    - cron: '0 2 * * *'
+
+  # Allow manual triggering for debugging
+  workflow_dispatch:
+    inputs:
+      skip_openai:
+        description: 'Skip OpenAI integration tests'
+        required: false
+        default: 'false'
+        type: boolean
+      debug_enabled:
+        description: 'Enable debug logging'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Only run on main/master branch
+# This ensures nightly tests don't run on feature branches
+env:
+  NIGHTLY_BRANCH: main
+
+jobs:
+  # Pre-flight check: verify we're on the correct branch
+  preflight:
+    name: Pre-flight Check
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: Check branch
+        id: check
+        run: |
+          # For scheduled runs, check if we're on main/master
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            if [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/master" ]; then
+              echo "should_run=true" >> $GITHUB_OUTPUT
+            else
+              echo "should_run=false" >> $GITHUB_OUTPUT
+              echo "::notice::Skipping nightly run - not on main/master branch"
+            fi
+          else
+            # For manual triggers, always run
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          fi
+
+  # Unit tests with race detection
+  # Race detection adds 2-10x overhead, so only run nightly
+  race-detection:
+    name: Race Detection
+    needs: preflight
+    if: needs.preflight.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests with race detector
+        run: |
+          echo "Running unit tests with race detection..."
+          go test -v -race -timeout 5m ./...
+
+  # Integration tests with PostgreSQL
+  database-integration:
+    name: Database Integration
+    needs: preflight
+    if: needs.preflight.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: chatbot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U test; then
+              echo "PostgreSQL is ready"
+              break
+            fi
+            echo "Waiting for PostgreSQL... ($i/30)"
+            sleep 2
+          done
+
+      - name: Run database migrations
+        run: |
+          # Install golang-migrate
+          go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+
+          # Run migrations
+          migrate -path ./migrations -database "postgres://test:test@localhost:5432/chatbot_test?sslmode=disable" up || true
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/chatbot_test?sslmode=disable
+
+      - name: Run integration tests
+        run: |
+          echo "Running database integration tests..."
+          go test -v -timeout 5m -tags=integration ./...
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/chatbot_test?sslmode=disable
+
+  # OpenAI API integration tests
+  # These tests make real API calls to OpenAI
+  openai-integration:
+    name: OpenAI Integration
+    needs: preflight
+    if: needs.preflight.outputs.should_run == 'true' && github.event.inputs.skip_openai != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check OpenAI API Key
+        run: |
+          if [ -z "${{ secrets.OPENAI_API_KEY }}" ]; then
+            echo "::warning::OPENAI_API_KEY secret is not set. Skipping OpenAI integration tests."
+            echo "SKIP_OPENAI=true" >> $GITHUB_ENV
+          else
+            echo "OpenAI API key is configured"
+            echo "SKIP_OPENAI=false" >> $GITHUB_ENV
+          fi
+
+      - name: Run OpenAI integration tests
+        if: env.SKIP_OPENAI != 'true'
+        run: |
+          echo "Running OpenAI integration tests..."
+          go test -v -timeout 10m -tags=openai ./...
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-4o-mini  # Use cheaper model for testing
+
+      - name: Skip notice
+        if: env.SKIP_OPENAI == 'true'
+        run: |
+          echo "::notice::OpenAI integration tests skipped - no API key configured"
+
+  # End-to-end tests with full stack
+  e2e-tests:
+    name: E2E Tests
+    needs: preflight
+    if: needs.preflight.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: chatbot_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build application
+        run: go build -o ./bin/chatbot-api ./cmd/api
+
+      - name: Run database migrations
+        run: |
+          go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+          migrate -path ./migrations -database "postgres://test:test@localhost:5432/chatbot_e2e?sslmode=disable" up || true
+
+      - name: Start application
+        run: |
+          ./bin/chatbot-api &
+          APP_PID=$!
+          echo "APP_PID=$APP_PID" >> $GITHUB_ENV
+
+          # Wait for app to be ready
+          for i in {1..30}; do
+            if curl -s http://localhost:8080/health > /dev/null 2>&1; then
+              echo "Application is ready"
+              break
+            fi
+            echo "Waiting for application... ($i/30)"
+            sleep 2
+          done
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/chatbot_e2e?sslmode=disable
+          JWT_SECRET: test-secret-key-for-e2e-testing
+          PORT: 8080
+
+      - name: Run E2E tests
+        run: |
+          echo "Running end-to-end tests..."
+          go test -v -timeout 10m -tags=e2e ./...
+        env:
+          E2E_BASE_URL: http://localhost:8080
+          DATABASE_URL: postgres://test:test@localhost:5432/chatbot_e2e?sslmode=disable
+
+      - name: Stop application
+        if: always()
+        run: |
+          if [ -n "$APP_PID" ]; then
+            kill $APP_PID || true
+          fi
+
+  # Matrix testing across Go versions
+  # Ensures compatibility with multiple Go versions
+  go-version-matrix:
+    name: Go ${{ matrix.go-version }}
+    needs: preflight
+    if: needs.preflight.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ['1.22', '1.23']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: Verify Go version
+        run: go version
+
+      - name: Run tests
+        run: |
+          echo "Testing with Go ${{ matrix.go-version }}..."
+          go test -v -timeout 5m ./...
+
+  # Summary job that depends on all test jobs
+  nightly-summary:
+    name: Nightly Summary
+    needs: [race-detection, database-integration, openai-integration, e2e-tests, go-version-matrix]
+    if: always() && needs.preflight.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check results
+        run: |
+          echo "=== Nightly Test Summary ==="
+          echo ""
+          echo "Race Detection:      ${{ needs.race-detection.result }}"
+          echo "Database Integration: ${{ needs.database-integration.result }}"
+          echo "OpenAI Integration:   ${{ needs.openai-integration.result }}"
+          echo "E2E Tests:            ${{ needs.e2e-tests.result }}"
+          echo "Go Version Matrix:    ${{ needs.go-version-matrix.result }}"
+          echo ""
+
+          # Determine overall status
+          if [ "${{ needs.race-detection.result }}" = "failure" ] || \
+             [ "${{ needs.database-integration.result }}" = "failure" ] || \
+             [ "${{ needs.e2e-tests.result }}" = "failure" ] || \
+             [ "${{ needs.go-version-matrix.result }}" = "failure" ]; then
+            echo "::error::One or more nightly tests failed!"
+            exit 1
+          fi
+
+          echo "All nightly tests completed successfully!"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Nightly tests failed! Check the workflow run for details."
+          # Add Slack/Discord/Email notification here if needed
+          # Example: curl -X POST -H 'Content-type: application/json' \
+          #   --data '{"text":"Nightly tests failed!"}' \
+          #   ${{ secrets.SLACK_WEBHOOK_URL }}
