@@ -13,14 +13,79 @@ import (
 
 // ToolService handles AI tool execution
 type ToolService struct {
-	queries *database.Queries
+	queries  *database.Queries
+	registry *ToolRegistry
 }
 
-// NewToolService creates a new tool service
+// NewToolService creates a new tool service with registered tools
 func NewToolService(queries *database.Queries) *ToolService {
-	return &ToolService{
-		queries: queries,
+	ts := &ToolService{
+		queries:  queries,
+		registry: NewToolRegistry(),
 	}
+
+	// Register all tools - adding a new tool is just one line here
+	ts.registerTools()
+
+	return ts
+}
+
+// registerTools registers all available tools
+// To add a new tool: add one line here + implement the handler
+func (s *ToolService) registerTools() {
+	s.registry.Register("add_understanding", GetAddUnderstandingToolDefinition(), s.handleAddUnderstanding)
+	s.registry.Register("generate_business_report", GetGenerateBusinessReportToolDefinition(), s.handleGenerateBusinessReport)
+}
+
+// GetRegistry returns the tool registry for external use
+func (s *ToolService) GetRegistry() *ToolRegistry {
+	return s.registry
+}
+
+// handleAddUnderstanding is the registry handler for add_understanding
+func (s *ToolService) handleAddUnderstanding(ctx context.Context, userID uuid.UUID, arguments string) (*ToolResult, error) {
+	var input AddUnderstandingInput
+	if err := json.Unmarshal([]byte(arguments), &input); err != nil {
+		return &ToolResult{Success: false, Error: fmt.Sprintf("invalid arguments: %v", err)}, nil
+	}
+
+	response, err := s.ExecuteAddUnderstanding(ctx, userID, input)
+	if err != nil {
+		return &ToolResult{Success: false, Error: err.Error()}, nil
+	}
+
+	return &ToolResult{
+		Success: true,
+		Message: response.Message,
+		Data: map[string]interface{}{
+			"updated_fields": response.UpdatedFields,
+			"status":         response.Status,
+			"next_steps":     response.NextSteps,
+		},
+	}, nil
+}
+
+// handleGenerateBusinessReport is the registry handler for generate_business_report
+func (s *ToolService) handleGenerateBusinessReport(ctx context.Context, userID uuid.UUID, arguments string) (*ToolResult, error) {
+	var input GenerateBusinessReportInput
+	if err := json.Unmarshal([]byte(arguments), &input); err != nil {
+		return &ToolResult{Success: false, Error: fmt.Sprintf("invalid arguments: %v", err)}, nil
+	}
+
+	response, err := s.ExecuteGenerateBusinessReport(ctx, userID, input)
+	if err != nil {
+		return &ToolResult{Success: false, Error: err.Error()}, nil
+	}
+
+	return &ToolResult{
+		Success: true,
+		Message: response.Message,
+		Data: map[string]interface{}{
+			"business_context": response.BusinessContext,
+			"report_type":      response.ReportType,
+			"status":           response.Status,
+		},
+	}, nil
 }
 
 // AddUnderstandingInput represents the input for the add_understanding tool

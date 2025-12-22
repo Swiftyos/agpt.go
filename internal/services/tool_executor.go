@@ -3,12 +3,12 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/google/uuid"
 )
 
 // ToolExecutor handles the execution of tool calls from the LLM
+// It delegates to the ToolRegistry for actual execution
 type ToolExecutor struct {
 	toolService *ToolService
 }
@@ -21,76 +21,31 @@ func NewToolExecutor(toolService *ToolService) *ToolExecutor {
 }
 
 // ToolExecutionResult represents the result of executing a tool
+// This wraps ToolResult for backward compatibility
 type ToolExecutionResult struct {
 	Success bool        `json:"success"`
 	Result  interface{} `json:"result,omitempty"`
 	Error   string      `json:"error,omitempty"`
 }
 
-// ExecuteTool executes a tool call and returns the result
+// ExecuteTool executes a tool call via the registry
 func (e *ToolExecutor) ExecuteTool(ctx context.Context, userID uuid.UUID, toolName string, arguments string) (*ToolExecutionResult, error) {
-	switch toolName {
-	case "add_understanding":
-		return e.executeAddUnderstanding(ctx, userID, arguments)
-	case "generate_business_report":
-		return e.executeGenerateBusinessReport(ctx, userID, arguments)
-	default:
-		return &ToolExecutionResult{
-			Success: false,
-			Error:   fmt.Sprintf("unknown tool: %s", toolName),
-		}, nil
+	// Delegate to the registry - no switch statement needed!
+	result, err := e.toolService.GetRegistry().Execute(ctx, userID, toolName, arguments)
+	if err != nil {
+		return &ToolExecutionResult{Success: false, Error: err.Error()}, nil
 	}
+
+	return &ToolExecutionResult{
+		Success: result.Success,
+		Result:  result,
+		Error:   result.Error,
+	}, nil
 }
 
 // ExecuteToolCall is a convenience method that takes a ToolCall directly
 func (e *ToolExecutor) ExecuteToolCall(ctx context.Context, userID uuid.UUID, toolCall ToolCall) (*ToolExecutionResult, error) {
 	return e.ExecuteTool(ctx, userID, toolCall.Function.Name, toolCall.Function.Arguments)
-}
-
-func (e *ToolExecutor) executeAddUnderstanding(ctx context.Context, userID uuid.UUID, arguments string) (*ToolExecutionResult, error) {
-	var input AddUnderstandingInput
-	if err := json.Unmarshal([]byte(arguments), &input); err != nil {
-		return &ToolExecutionResult{
-			Success: false,
-			Error:   fmt.Sprintf("invalid arguments: %v", err),
-		}, nil
-	}
-
-	response, err := e.toolService.ExecuteAddUnderstanding(ctx, userID, input)
-	if err != nil {
-		return &ToolExecutionResult{
-			Success: false,
-			Error:   err.Error(),
-		}, nil
-	}
-
-	return &ToolExecutionResult{
-		Success: true,
-		Result:  response,
-	}, nil
-}
-
-func (e *ToolExecutor) executeGenerateBusinessReport(ctx context.Context, userID uuid.UUID, arguments string) (*ToolExecutionResult, error) {
-	var input GenerateBusinessReportInput
-	if err := json.Unmarshal([]byte(arguments), &input); err != nil {
-		return &ToolExecutionResult{
-			Success: false,
-			Error:   fmt.Sprintf("invalid arguments: %v", err),
-		}, nil
-	}
-
-	response, err := e.toolService.ExecuteGenerateBusinessReport(ctx, userID, input)
-	if err != nil {
-		return &ToolExecutionResult{
-			Success: false,
-			Error:   err.Error(),
-		}, nil
-	}
-
-	return &ToolExecutionResult{
-		Success: true,
-		Result:  response,
-	}, nil
 }
 
 // ToToolResultMessage converts a tool execution result to a chat message
