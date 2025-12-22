@@ -151,7 +151,7 @@ jobs:
           go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
           # Run migrations
-          migrate -path ./migrations -database "postgres://test:test@localhost:5432/chatbot_test?sslmode=disable" up || true
+          migrate -path ./migrations -database "postgres://test:test@localhost:5432/chatbot_test?sslmode=disable" up
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/chatbot_test?sslmode=disable
 
@@ -245,7 +245,7 @@ jobs:
       - name: Run database migrations
         run: |
           go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
-          migrate -path ./migrations -database "postgres://test:test@localhost:5432/chatbot_e2e?sslmode=disable" up || true
+          migrate -path ./migrations -database "postgres://test:test@localhost:5432/chatbot_e2e?sslmode=disable" up
 
       - name: Start application
         run: |
