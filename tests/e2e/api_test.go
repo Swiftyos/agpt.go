@@ -121,19 +121,21 @@ func TestE2E_AuthFlow(t *testing.T) {
 
 	// Parse login response
 	var loginResp struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
+		Tokens struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+		} `json:"tokens"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&loginResp); err != nil {
 		t.Fatalf("Failed to parse login response: %v", err)
 	}
 
-	if loginResp.AccessToken == "" {
+	if loginResp.Tokens.AccessToken == "" {
 		t.Error("Expected access token in login response")
 	}
 
-	if loginResp.RefreshToken == "" {
+	if loginResp.Tokens.RefreshToken == "" {
 		t.Error("Expected refresh token in login response")
 	}
 
