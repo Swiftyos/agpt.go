@@ -210,13 +210,14 @@ func (s *LLMService) ChatStreamWithTools(ctx context.Context, messages []ChatMes
 		return nil, fmt.Errorf("failed to create stream: %w", err)
 	}
 
-	chunks := make(chan StreamChunk)
+	// Buffer size prevents blocking on slow consumers and reduces goroutine leak risk
+	chunks := make(chan StreamChunk, 10)
 
 	go func() {
 		defer close(chunks)
 		defer stream.Close()
 
-		// Accumulate tool calls as they stream in
+		// toolCalls accumulates streaming tool call data (goroutine-local, no sync needed)
 		toolCalls := make(map[int]*toolCallAccumulator)
 
 		for {

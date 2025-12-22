@@ -17,8 +17,8 @@ const (
 	PartTypeFunctionCall     = "1" // Function call (legacy)
 	PartTypeData             = "2" // Data array
 	PartTypeError            = "3" // Error message
-	PartTypeAssistantMsg     = "4" // Assistant control data
-	PartTypeAssistantCtrl    = "5" // Assistant message
+	PartTypeAssistantMsg     = "4" // Assistant message
+	PartTypeAssistantCtrl    = "5" // Assistant control data
 	PartTypeDataMessage      = "6" // Structured data message
 	PartTypeToolCallDelta    = "7" // Tool call streaming delta (legacy)
 	PartTypeAnnotation       = "8" // Message annotation
@@ -53,6 +53,15 @@ const (
 	FinishReasonUnknown       FinishReasonType = "unknown"
 )
 
+// ErrEmptyMessageID is returned when messageID is empty
+var ErrEmptyMessageID = fmt.Errorf("messageID cannot be empty")
+
+// ErrEmptyToolCallID is returned when toolCallID is empty
+var ErrEmptyToolCallID = fmt.Errorf("toolCallID cannot be empty")
+
+// ErrEmptyToolName is returned when toolName is empty
+var ErrEmptyToolName = fmt.Errorf("toolName cannot be empty")
+
 // StreamWriter handles writing AI SDK compatible stream responses
 type StreamWriter struct {
 	w       http.ResponseWriter
@@ -76,17 +85,24 @@ func NewStreamWriter(w http.ResponseWriter) (*StreamWriter, error) {
 	return &StreamWriter{w: w, flusher: flusher}, nil
 }
 
+// StartData represents the message start payload (type "f")
+type StartData struct {
+	MessageID string `json:"messageId"`
+}
+
 // WriteStart writes the message start part with message ID
 func (sw *StreamWriter) WriteStart(messageID string) error {
-	data := map[string]interface{}{
-		"messageId": messageID,
+	if messageID == "" {
+		return ErrEmptyMessageID
 	}
+	data := StartData{MessageID: messageID}
 	return sw.writePart(PartTypeStart, data)
 }
 
-// WriteText writes a text chunk
+// WriteText writes a text chunk (JSON encoded to handle special characters)
 func (sw *StreamWriter) WriteText(text string) error {
-	return sw.writeRaw(fmt.Sprintf("%s:%s\n", PartTypeText, text))
+	// JSON encode to properly escape newlines and special characters
+	return sw.writePart(PartTypeText, text)
 }
 
 // WriteData writes arbitrary data
@@ -94,9 +110,9 @@ func (sw *StreamWriter) WriteData(data []interface{}) error {
 	return sw.writePart(PartTypeData, data)
 }
 
-// WriteError writes an error message
+// WriteError writes an error message (JSON encoded)
 func (sw *StreamWriter) WriteError(message string) error {
-	return sw.writeRaw(fmt.Sprintf("%s:%s\n", PartTypeError, message))
+	return sw.writePart(PartTypeError, message)
 }
 
 // WriteAnnotation writes a message annotation
@@ -151,6 +167,12 @@ type ToolCallArgDelta struct {
 
 // WriteToolCall writes a tool call invocation (type "9")
 func (sw *StreamWriter) WriteToolCall(toolCallID, toolName string, args interface{}) error {
+	if toolCallID == "" {
+		return ErrEmptyToolCallID
+	}
+	if toolName == "" {
+		return ErrEmptyToolName
+	}
 	data := ToolCall{
 		ToolCallID: toolCallID,
 		ToolName:   toolName,
@@ -161,6 +183,9 @@ func (sw *StreamWriter) WriteToolCall(toolCallID, toolName string, args interfac
 
 // WriteToolResult writes a tool call result (type "a")
 func (sw *StreamWriter) WriteToolResult(toolCallID string, result interface{}) error {
+	if toolCallID == "" {
+		return ErrEmptyToolCallID
+	}
 	data := ToolResult{
 		ToolCallID: toolCallID,
 		Result:     result,
@@ -170,6 +195,12 @@ func (sw *StreamWriter) WriteToolResult(toolCallID string, result interface{}) e
 
 // WriteToolCallStart writes the start of a streaming tool call (type "b")
 func (sw *StreamWriter) WriteToolCallStart(toolCallID, toolName string) error {
+	if toolCallID == "" {
+		return ErrEmptyToolCallID
+	}
+	if toolName == "" {
+		return ErrEmptyToolName
+	}
 	data := ToolCallStart{
 		ToolCallID: toolCallID,
 		ToolName:   toolName,
@@ -179,6 +210,9 @@ func (sw *StreamWriter) WriteToolCallStart(toolCallID, toolName string) error {
 
 // WriteToolCallArgDelta writes incremental tool call arguments (type "c")
 func (sw *StreamWriter) WriteToolCallArgDelta(toolCallID, argsDelta string) error {
+	if toolCallID == "" {
+		return ErrEmptyToolCallID
+	}
 	data := ToolCallArgDelta{
 		ToolCallID:    toolCallID,
 		ArgsTextDelta: argsDelta,
@@ -223,15 +257,18 @@ func (sw *StreamWriter) Close() {
 func (sw *StreamWriter) writePart(partType string, data interface{}) error {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal data: %w", err)
 	}
 	return sw.writeRaw(fmt.Sprintf("%s:%s\n", partType, string(jsonData)))
 }
 
 func (sw *StreamWriter) writeRaw(data string) error {
-	_, err := io.WriteString(sw.w, data)
+	n, err := io.WriteString(sw.w, data)
 	if err != nil {
-		return err
+		return fmt.Errorf("write failed after %d bytes: %w", n, err)
+	}
+	if n != len(data) {
+		return fmt.Errorf("partial write: wrote %d of %d bytes", n, len(data))
 	}
 	sw.flusher.Flush()
 	return nil
@@ -244,6 +281,7 @@ type DataStreamResponse struct {
 	Text     string    `json:"text,omitempty"`
 }
 
+// Message represents a chat message
 type Message struct {
 	ID        string `json:"id"`
 	Role      string `json:"role"`
