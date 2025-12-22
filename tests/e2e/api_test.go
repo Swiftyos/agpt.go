@@ -48,6 +48,17 @@ func TestMain(m *testing.M) {
 		Timeout: time.Duration(timeout) * time.Second,
 	}
 
+	// Check if server is running - fail early if not
+	checkClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := checkClient.Get(baseURL + "/health")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: Server not running at %s\n", baseURL)
+		fmt.Fprintf(os.Stderr, "E2E tests require a running server. Start the application first.\n")
+		fmt.Fprintf(os.Stderr, "Connection error: %v\n", err)
+		os.Exit(1)
+	}
+	resp.Body.Close()
+
 	// Run tests
 	code := m.Run()
 

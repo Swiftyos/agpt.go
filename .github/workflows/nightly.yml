@@ -242,17 +242,25 @@ jobs:
           echo "APP_PID=$APP_PID" >> $GITHUB_ENV
 
           # Wait for app to be ready
+          APP_READY=false
           for i in {1..30}; do
             if curl -s http://localhost:8080/health > /dev/null 2>&1; then
               echo "Application is ready"
+              APP_READY=true
               break
             fi
             echo "Waiting for application... ($i/30)"
             sleep 2
           done
+
+          if [ "$APP_READY" != "true" ]; then
+            echo "::error::Application failed to start within 60 seconds"
+            exit 1
+          fi
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/chatbot_e2e?sslmode=disable
           JWT_SECRET: test-secret-key-for-e2e-testing
+          OPENAI_API_KEY: test-key-not-used-in-e2e
           PORT: 8080
 
       - name: Run E2E tests
