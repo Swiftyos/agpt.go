@@ -47,8 +47,20 @@ jobs:
 
       - name: Build and Test
         run: |
-          # Build (fast, no verbose)
+          # Build
           go build ./...
 
-          # Test (no verbose, no coverage for speed - coverage in nightly)
-          go test -timeout 20s ./...
+          # Test with verbose output and summary
+          go test -v -timeout 20s ./... 2>&1 | tee test.out
+
+          # Show summary
+          PASSED=$(grep -c "^--- PASS:" test.out || true)
+          FAILED=$(grep -c "^--- FAIL:" test.out || true)
+          echo ""
+          echo "=============================="
+          echo "Tests passed: $PASSED"
+          echo "Tests failed: $FAILED"
+          echo "=============================="
+
+          # Fail if any tests failed
+          [ "$FAILED" = "0" ]
