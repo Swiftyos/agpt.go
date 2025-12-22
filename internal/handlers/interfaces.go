@@ -20,6 +20,8 @@ type ChatServicer interface {
 	SendMessage(ctx context.Context, sessionID, userID uuid.UUID, content string) (*database.ChatMessage, *database.ChatMessage, error)
 	SendMessageStream(ctx context.Context, sessionID, userID uuid.UUID, content string) (*database.ChatMessage, <-chan services.StreamChunk, error)
 	SaveStreamedResponse(ctx context.Context, sessionID uuid.UUID, content string) (*database.ChatMessage, error)
+	GetToolExecutor() *services.ToolExecutor
+	GetAvailableTools() []services.ToolDefinition
 }
 
 // AuthServicer defines the interface for auth service operations

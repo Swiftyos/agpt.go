@@ -18,11 +18,13 @@ type Querier interface {
 	CreateChatSession(ctx context.Context, arg CreateChatSessionParams) (ChatSession, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteBusinessUnderstanding(ctx context.Context, userID uuid.UUID) error
 	DeleteCache(ctx context.Context, key string) error
 	DeleteCacheByPrefix(ctx context.Context, dollar_1 *string) (int64, error)
 	DeleteChatMessage(ctx context.Context, id uuid.UUID) error
 	DeleteChatSession(ctx context.Context, arg DeleteChatSessionParams) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
+	GetBusinessUnderstanding(ctx context.Context, userID uuid.UUID) (BusinessUnderstanding, error)
 	GetCache(ctx context.Context, key string) (Cache, error)
 	GetChatMessages(ctx context.Context, sessionID uuid.UUID) ([]ChatMessage, error)
 	GetChatSession(ctx context.Context, id uuid.UUID) (ChatSession, error)
@@ -40,6 +42,7 @@ type Querier interface {
 	UpdateChatSession(ctx context.Context, arg UpdateChatSessionParams) (ChatSession, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpsertBusinessUnderstanding(ctx context.Context, arg UpsertBusinessUnderstandingParams) (BusinessUnderstanding, error)
 }
 
 var _ Querier = (*Queries)(nil)

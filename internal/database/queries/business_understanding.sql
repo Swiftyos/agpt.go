@@ -1,0 +1,45 @@
+-- name: GetBusinessUnderstanding :one
+SELECT * FROM business_understanding WHERE user_id = $1;
+
+-- name: UpsertBusinessUnderstanding :one
+INSERT INTO business_understanding (
+    user_id,
+    user_name,
+    job_title,
+    business_name,
+    industry,
+    business_size,
+    user_role,
+    key_workflows,
+    daily_activities,
+    pain_points,
+    bottlenecks,
+    manual_tasks,
+    automation_goals,
+    current_software,
+    existing_automation,
+    additional_notes
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+)
+ON CONFLICT (user_id) DO UPDATE SET
+    user_name = COALESCE(NULLIF(EXCLUDED.user_name, ''), business_understanding.user_name),
+    job_title = COALESCE(NULLIF(EXCLUDED.job_title, ''), business_understanding.job_title),
+    business_name = COALESCE(NULLIF(EXCLUDED.business_name, ''), business_understanding.business_name),
+    industry = COALESCE(NULLIF(EXCLUDED.industry, ''), business_understanding.industry),
+    business_size = COALESCE(NULLIF(EXCLUDED.business_size, ''), business_understanding.business_size),
+    user_role = COALESCE(NULLIF(EXCLUDED.user_role, ''), business_understanding.user_role),
+    key_workflows = EXCLUDED.key_workflows,
+    daily_activities = EXCLUDED.daily_activities,
+    pain_points = EXCLUDED.pain_points,
+    bottlenecks = EXCLUDED.bottlenecks,
+    manual_tasks = EXCLUDED.manual_tasks,
+    automation_goals = EXCLUDED.automation_goals,
+    current_software = EXCLUDED.current_software,
+    existing_automation = EXCLUDED.existing_automation,
+    additional_notes = COALESCE(NULLIF(EXCLUDED.additional_notes, ''), business_understanding.additional_notes),
+    updated_at = NOW()
+RETURNING *;
+
+-- name: DeleteBusinessUnderstanding :exec
+DELETE FROM business_understanding WHERE user_id = $1;

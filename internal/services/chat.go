@@ -9,15 +9,36 @@ import (
 )
 
 type ChatService struct {
-	queries    *database.Queries
-	llmService *LLMService
+	queries      *database.Queries
+	llmService   *LLMService
+	toolService  *ToolService
+	toolExecutor *ToolExecutor
 }
 
 func NewChatService(queries *database.Queries, llmService *LLMService) *ChatService {
+	toolService := NewToolService(queries)
+	toolExecutor := NewToolExecutor(toolService)
 	return &ChatService{
-		queries:    queries,
-		llmService: llmService,
+		queries:      queries,
+		llmService:   llmService,
+		toolService:  toolService,
+		toolExecutor: toolExecutor,
 	}
+}
+
+// GetToolExecutor returns the tool executor for handling tool calls
+func (s *ChatService) GetToolExecutor() *ToolExecutor {
+	return s.toolExecutor
+}
+
+// GetToolService returns the tool service for direct access
+func (s *ChatService) GetToolService() *ToolService {
+	return s.toolService
+}
+
+// GetAvailableTools returns all available tool definitions
+func (s *ChatService) GetAvailableTools() []ToolDefinition {
+	return GetAllToolDefinitions()
 }
 
 type CreateSessionInput struct {
@@ -173,24 +194,24 @@ func (s *ChatService) SendMessage(ctx context.Context, sessionID, userID uuid.UU
 		}
 	}
 
-	// Get system prompt
-	systemPrompt := ""
-	if session.SystemPrompt != nil {
-		systemPrompt = *session.SystemPrompt
-	}
+	// Build system prompt with business context
+	systemPrompt := s.buildEnhancedSystemPrompt(ctx, userID, session.SystemPrompt)
 
-	// Generate response
-	response, usage, err := s.llmService.Chat(ctx, llmMessages, systemPrompt)
+	// Get available tools
+	tools := s.GetAvailableTools()
+
+	// Generate response with tools
+	chatResp, err := s.llmService.ChatWithTools(ctx, llmMessages, systemPrompt, tools)
 	if err != nil {
 		return userMsg, nil, fmt.Errorf("failed to generate response: %w", err)
 	}
 
 	// Save assistant message
 	assistantTokens := 0
-	if usage != nil {
-		assistantTokens = usage.CompletionTokens
+	if chatResp.Usage != nil {
+		assistantTokens = chatResp.Usage.CompletionTokens
 	}
-	assistantMsg, err := s.SaveMessage(ctx, sessionID, "assistant", response, assistantTokens)
+	assistantMsg, err := s.SaveMessage(ctx, sessionID, "assistant", chatResp.Content, assistantTokens)
 	if err != nil {
 		return userMsg, nil, err
 	}
@@ -228,19 +249,39 @@ func (s *ChatService) SendMessageStream(ctx context.Context, sessionID, userID u
 		}
 	}
 
-	// Get system prompt
-	systemPrompt := ""
-	if session.SystemPrompt != nil {
-		systemPrompt = *session.SystemPrompt
-	}
+	// Build system prompt with business context
+	systemPrompt := s.buildEnhancedSystemPrompt(ctx, userID, session.SystemPrompt)
 
-	// Start streaming
-	chunks, err := s.llmService.ChatStream(ctx, llmMessages, systemPrompt)
+	// Get available tools
+	tools := s.GetAvailableTools()
+
+	// Start streaming with tools
+	chunks, err := s.llmService.ChatStreamWithTools(ctx, llmMessages, systemPrompt, tools)
 	if err != nil {
 		return userMsg, nil, err
 	}
 
 	return userMsg, chunks, nil
+}
+
+// buildEnhancedSystemPrompt builds a system prompt enhanced with business context
+func (s *ChatService) buildEnhancedSystemPrompt(ctx context.Context, userID uuid.UUID, basePrompt *string) string {
+	var prompt string
+	if basePrompt != nil {
+		prompt = *basePrompt
+	}
+
+	// Add business context if available
+	businessContext, err := s.toolService.BuildSystemPromptContext(ctx, userID)
+	if err == nil && businessContext != "" {
+		if prompt != "" {
+			prompt = prompt + "\n" + businessContext
+		} else {
+			prompt = businessContext
+		}
+	}
+
+	return prompt
 }
 
 // SaveStreamedResponse saves the accumulated response after streaming completes
