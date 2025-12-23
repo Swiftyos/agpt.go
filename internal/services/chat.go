@@ -15,8 +15,8 @@ type ChatService struct {
 	toolExecutor *ToolExecutor
 }
 
-func NewChatService(queries *database.Queries, llmService *LLMService) *ChatService {
-	toolService := NewToolService(queries)
+func NewChatService(queries *database.Queries, llmService *LLMService, analytics *AnalyticsService) *ChatService {
+	toolService := NewToolService(queries, analytics)
 	toolExecutor := NewToolExecutor(toolService)
 	return &ChatService{
 		queries:      queries,
