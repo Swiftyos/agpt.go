@@ -61,14 +61,18 @@ func main() {
 	// Initialize queries
 	queries := database.New(pool)
 
+	// Initialize analytics service
+	analyticsService := services.NewAnalyticsService(&cfg.Analytics)
+	defer analyticsService.Close()
+
 	// Initialize services
 	authService := services.NewAuthService(queries, cfg)
 	llmService := services.NewLLMService(&cfg.OpenAI)
-	chatService := services.NewChatService(queries, llmService)
+	chatService := services.NewChatService(queries, llmService, analyticsService)
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(authService)
-	chatHandler := handlers.NewChatHandler(chatService)
+	authHandler := handlers.NewAuthHandler(authService, analyticsService)
+	chatHandler := handlers.NewChatHandler(chatService, analyticsService)
 	sessionHandler := handlers.NewSessionHandler(queries)
 	openapiHandler := handlers.NewOpenAPIHandler()
 

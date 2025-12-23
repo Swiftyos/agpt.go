@@ -20,12 +20,14 @@ import (
 
 type ChatHandler struct {
 	chatService ChatServicer
+	analytics   AnalyticsServicer
 	validate    Validator
 }
 
-func NewChatHandler(chatService ChatServicer) *ChatHandler {
+func NewChatHandler(chatService ChatServicer, analytics AnalyticsServicer) *ChatHandler {
 	return &ChatHandler{
 		chatService: chatService,
+		analytics:   analytics,
 		validate:    validator.New(),
 	}
 }
@@ -134,6 +136,15 @@ func (h *ChatHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create session")
 		return
+	}
+
+	// Track session created event
+	if h.analytics != nil {
+		// Get session count for this user to determine if returning
+		sessions, _ := h.chatService.ListSessions(r.Context(), userID, 1, 0)
+		isReturning := len(sessions) > 1
+		sessionCount := len(sessions)
+		h.analytics.TrackSessionCreated(userID, session.ID, isReturning, sessionCount)
 	}
 
 	writeJSON(w, http.StatusCreated, sessionToResponse(session))
@@ -408,6 +419,14 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Track message sent event
+	if h.analytics != nil {
+		messages, _ := h.chatService.GetMessages(r.Context(), sessionID, 100)
+		messageCount := len(messages)
+		isFirstMessage := messageCount <= 2 // user + assistant message
+		h.analytics.TrackMessageSent(userID, sessionID, messageCount, isFirstMessage)
+	}
+
 	userMsgResp := messageToResponse(userMsg)
 	response := ChatResponse{
 		UserMessage: &userMsgResp,
@@ -468,6 +487,14 @@ func (h *ChatHandler) SendMessageStream(w http.ResponseWriter, r *http.Request) 
 		}
 		writeError(w, http.StatusInternalServerError, "Failed to send message")
 		return
+	}
+
+	// Track message sent event
+	if h.analytics != nil {
+		messages, _ := h.chatService.GetMessages(r.Context(), sessionID, 100)
+		messageCount := len(messages)
+		isFirstMessage := messageCount <= 1 // only user message at this point
+		h.analytics.TrackMessageSent(userID, sessionID, messageCount, isFirstMessage)
 	}
 
 	// Initialize stream writer

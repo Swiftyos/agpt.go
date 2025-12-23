@@ -14,7 +14,7 @@ func TestNewChatService(t *testing.T) {
 	}
 	llmService := NewLLMService(llmCfg)
 
-	svc := NewChatService(nil, llmService)
+	svc := NewChatService(nil, llmService, nil)
 
 	if svc == nil {
 		t.Fatal("NewChatService() returned nil")

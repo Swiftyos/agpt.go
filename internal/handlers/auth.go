@@ -12,12 +12,14 @@ import (
 
 type AuthHandler struct {
 	authService AuthServicer
+	analytics   AnalyticsServicer
 	validate    Validator
 }
 
-func NewAuthHandler(authService AuthServicer) *AuthHandler {
+func NewAuthHandler(authService AuthServicer, analytics AnalyticsServicer) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
+		analytics:   analytics,
 		validate:    validator.New(),
 	}
 }
@@ -85,6 +87,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Track signup event
+	if h.analytics != nil {
+		h.analytics.TrackUserSignedUp(user.ID, user.Email, user.Name, "email")
+	}
+
 	writeJSON(w, http.StatusCreated, AuthResponse{
 		User:   UserToResponse(user),
 		Tokens: tokens,
@@ -123,6 +130,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusInternalServerError, "Failed to login")
 		return
+	}
+
+	// Track login event
+	if h.analytics != nil {
+		h.analytics.TrackUserLoggedIn(user.ID, "email")
 	}
 
 	writeJSON(w, http.StatusOK, AuthResponse{
@@ -250,6 +262,11 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		logging.Error("google oauth callback failed", err)
 		writeError(w, http.StatusInternalServerError, "Failed to authenticate with Google")
 		return
+	}
+
+	// Track Google signup/login - we track as signup since HandleGoogleCallback creates user if not exists
+	if h.analytics != nil {
+		h.analytics.TrackUserSignedUp(user.ID, user.Email, user.Name, "google")
 	}
 
 	writeJSON(w, http.StatusOK, AuthResponse{

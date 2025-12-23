@@ -42,3 +42,11 @@ type AuthServicer interface {
 type Validator interface {
 	Struct(s interface{}) error
 }
+
+// AnalyticsServicer defines the interface for analytics operations
+type AnalyticsServicer interface {
+	TrackUserSignedUp(userID uuid.UUID, email, name, signupMethod string)
+	TrackUserLoggedIn(userID uuid.UUID, loginMethod string)
+	TrackSessionCreated(userID uuid.UUID, sessionID uuid.UUID, isReturningUser bool, sessionCount int)
+	TrackMessageSent(userID uuid.UUID, sessionID uuid.UUID, messageNumber int, isFirstMessage bool)
+}

@@ -11,11 +11,18 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
-	OAuth    OAuthConfig
-	OpenAI   OpenAIConfig
+	Server    ServerConfig
+	Database  DatabaseConfig
+	JWT       JWTConfig
+	OAuth     OAuthConfig
+	OpenAI    OpenAIConfig
+	Analytics AnalyticsConfig
+}
+
+type AnalyticsConfig struct {
+	PostHogAPIKey  string
+	PostHogHost    string
+	Enabled        bool
 }
 
 type ServerConfig struct {
@@ -139,6 +146,11 @@ func Load() (*Config, error) {
 		OpenAI: OpenAIConfig{
 			APIKey: getEnv("OPENAI_API_KEY", ""),
 			Model:  getEnv("OPENAI_MODEL", "gpt-5-mini-2025-08-07"),
+		},
+		Analytics: AnalyticsConfig{
+			PostHogAPIKey: getEnv("POSTHOG_API_KEY", ""),
+			PostHogHost:   getEnv("POSTHOG_HOST", "https://us.i.posthog.com"),
+			Enabled:       getEnv("POSTHOG_ENABLED", "true") == "true",
 		},
 	}
 

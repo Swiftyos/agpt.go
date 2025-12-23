@@ -13,15 +13,17 @@ import (
 
 // ToolService handles AI tool execution
 type ToolService struct {
-	queries  *database.Queries
-	registry *ToolRegistry
+	queries   *database.Queries
+	registry  *ToolRegistry
+	analytics *AnalyticsService
 }
 
 // NewToolService creates a new tool service with registered tools
-func NewToolService(queries *database.Queries) *ToolService {
+func NewToolService(queries *database.Queries, analytics *AnalyticsService) *ToolService {
 	ts := &ToolService{
-		queries:  queries,
-		registry: NewToolRegistry(),
+		queries:   queries,
+		registry:  NewToolRegistry(),
+		analytics: analytics,
 	}
 
 	// Register all tools - adding a new tool is just one line here
@@ -333,6 +335,12 @@ func (s *ToolService) ExecuteAddUnderstanding(ctx context.Context, userID uuid.U
 	// Build status
 	status := buildUnderstandingStatus(understanding)
 
+	// Track business context added event
+	if s.analytics != nil {
+		completeness := CalculateCompletenessPercentage(status)
+		s.analytics.TrackBusinessContextAdded(userID, updatedFields, completeness)
+	}
+
 	// Generate next steps message
 	nextSteps := generateNextStepsMessage(status)
 
@@ -363,6 +371,10 @@ func (s *ToolService) ExecuteGenerateBusinessReport(ctx context.Context, userID 
 	// Get the current understanding
 	understanding, err := s.queries.GetBusinessUnderstanding(ctx, userID)
 	if err == pgx.ErrNoRows {
+		// Track report request with insufficient data
+		if s.analytics != nil {
+			s.analytics.TrackBusinessReportRequested(userID, input.ReportType, "insufficient_data", 0)
+		}
 		return &BusinessReportResponse{
 			Message:    "I don't have enough information about your business yet. Let's start by learning more about your company, your role, and what challenges you're facing.",
 			Status:     "insufficient_data",
@@ -394,13 +406,24 @@ func (s *ToolService) ExecuteGenerateBusinessReport(ctx context.Context, userID 
 
 	// Check if we have enough data for a meaningful report
 	status := buildUnderstandingStatus(understanding)
+	completeness := CalculateCompletenessPercentage(status)
+
 	if !hasMinimumDataForReport(status) {
+		// Track report request with partial data
+		if s.analytics != nil {
+			s.analytics.TrackBusinessReportRequested(userID, input.ReportType, "needs_more_data", completeness)
+		}
 		return &BusinessReportResponse{
 			Message:         generateDataGapsMessage(status),
 			BusinessContext: businessContext,
 			Status:          "needs_more_data",
 			ReportType:      input.ReportType,
 		}, nil
+	}
+
+	// Track successful report generation - this is the key activation event!
+	if s.analytics != nil {
+		s.analytics.TrackBusinessReportRequested(userID, input.ReportType, "ready_for_report", completeness)
 	}
 
 	// For now, return a stub response indicating report generation is pending
