@@ -120,6 +120,15 @@ CREATE INDEX IF NOT EXISTS idx_referral_signups_referrer ON referral_signups(ref
 CREATE INDEX IF NOT EXISTS idx_referral_signups_referee ON referral_signups(referee_id);
 CREATE INDEX IF NOT EXISTS idx_referral_signups_status ON referral_signups(status);
 
+-- Markus Winand: Index for conversion status lookups
+CREATE INDEX IF NOT EXISTS idx_referral_clicks_converted ON referral_clicks(converted_user_id)
+    WHERE converted_user_id IS NOT NULL;
+
+-- Markus Winand: Partial index for finding unconverted clicks by visitor
+-- Optimizes GetReferralClickByVisitor query
+CREATE INDEX IF NOT EXISTS idx_referral_clicks_unconverted ON referral_clicks(visitor_id, created_at DESC)
+    WHERE converted_user_id IS NULL;
+
 -- Triggers for updated_at
 CREATE TRIGGER update_referral_codes_updated_at
     BEFORE UPDATE ON referral_codes

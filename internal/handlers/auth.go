@@ -101,6 +101,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		if err := h.referralService.ProcessReferralSignup(r.Context(), user.ID, *req.ReferralCode, req.VisitorID); err != nil {
 			// Log error but don't fail the registration
 			logging.Warn("failed to process referral signup", "error", err, "code", *req.ReferralCode)
+			// Charity Majors: Track errors in analytics for observability
+			if h.analytics != nil {
+				h.analytics.TrackError(user.ID, "referral_attribution", err.Error(), *req.ReferralCode)
+			}
 		}
 	}
 

@@ -17,12 +17,17 @@ type Config struct {
 	OAuth     OAuthConfig
 	OpenAI    OpenAIConfig
 	Analytics AnalyticsConfig
+	Referral  ReferralConfig
+}
+
+type ReferralConfig struct {
+	IPSalt string // Salt for hashing IP addresses (Troy Hunt: don't hardcode secrets)
 }
 
 type AnalyticsConfig struct {
-	PostHogAPIKey  string
-	PostHogHost    string
-	Enabled        bool
+	PostHogAPIKey string
+	PostHogHost   string
+	Enabled       bool
 }
 
 type ServerConfig struct {
@@ -153,6 +158,10 @@ func Load() (*Config, error) {
 			PostHogAPIKey: getEnv("POSTHOG_API_KEY", ""),
 			PostHogHost:   getEnv("POSTHOG_HOST", "https://us.i.posthog.com"),
 			Enabled:       getEnv("POSTHOG_ENABLED", "true") == "true",
+		},
+		Referral: ReferralConfig{
+			// Troy Hunt: Use environment variable for salt, with a random default for dev
+			IPSalt: getEnv("REFERRAL_IP_SALT", "dev-referral-salt-change-in-production"),
 		},
 	}
 

@@ -22,15 +22,35 @@ type ReferralService struct {
 	queries   *database.Queries
 	analytics *AnalyticsService
 	baseURL   string // Base URL for generating share links
+	ipSalt    string // Salt for hashing IPs (Troy Hunt: configurable, not hardcoded)
 }
 
 // NewReferralService creates a new referral service
-func NewReferralService(queries *database.Queries, analytics *AnalyticsService, baseURL string) *ReferralService {
+func NewReferralService(queries *database.Queries, analytics *AnalyticsService, baseURL, ipSalt string) *ReferralService {
 	return &ReferralService{
 		queries:   queries,
 		analytics: analytics,
 		baseURL:   strings.TrimSuffix(baseURL, "/"),
+		ipSalt:    ipSalt,
 	}
+}
+
+// HashIP creates a privacy-preserving hash of an IP address
+// Troy Hunt: Salt should come from config, not be hardcoded
+func (s *ReferralService) HashIP(ip string) string {
+	hash := sha256.Sum256([]byte(ip + s.ipSalt))
+	return hex.EncodeToString(hash[:8])
+}
+
+// HashVisitorID creates a privacy-preserving hash of a visitor ID
+// Troy Hunt: Hash identifiers to prevent tracking across systems
+func (s *ReferralService) HashVisitorID(visitorID string) string {
+	if visitorID == "" {
+		return ""
+	}
+	// Use different prefix than IP to prevent collision
+	hash := sha256.Sum256([]byte("visitor:" + visitorID + s.ipSalt))
+	return hex.EncodeToString(hash[:16]) // Longer hash for better uniqueness
 }
 
 // ShareChannel represents the channel through which a referral was shared
@@ -183,10 +203,13 @@ func (s *ReferralService) RecordClick(ctx context.Context, referralCode string, 
 		return nil, fmt.Errorf("failed to get referral code: %w", err)
 	}
 
+	// Hash visitor_id for privacy (Troy Hunt: don't store raw identifiers)
+	hashedVisitorID := s.HashVisitorID(visitorID)
+
 	// Record the click
 	click, err := s.queries.CreateReferralClick(ctx, database.CreateReferralClickParams{
 		ReferralCodeID: code.ID,
-		VisitorID:      stringPtr(visitorID),
+		VisitorID:      stringPtr(hashedVisitorID),
 		IpHash:         stringPtr(ipHash),
 		UserAgent:      stringPtr(userAgent),
 		LandingPage:    stringPtr(landingPage),
@@ -235,8 +258,10 @@ func (s *ReferralService) ProcessReferralSignup(ctx context.Context, newUserID u
 
 	// Try to find the click that led to this signup
 	var clickID *uuid.UUID
-	if visitorID != nil {
-		click, err := s.queries.GetReferralClickByVisitor(ctx, visitorID)
+	if visitorID != nil && *visitorID != "" {
+		// Hash the visitor_id to match stored hashed value (Troy Hunt: consistent hashing)
+		hashedVisitorID := s.HashVisitorID(*visitorID)
+		click, err := s.queries.GetReferralClickByVisitor(ctx, &hashedVisitorID)
 		if err == nil {
 			clickID = &click.ID
 			// Mark click as converted
@@ -496,12 +521,6 @@ func derefString(s *string) string {
 		return ""
 	}
 	return *s
-}
-
-// hashIP creates a privacy-preserving hash of an IP address
-func HashIP(ip string) string {
-	hash := sha256.Sum256([]byte(ip + "referral-salt"))
-	return hex.EncodeToString(hash[:8])
 }
 
 func formatTimestamptz(ts pgtype.Timestamptz) string {

@@ -69,7 +69,7 @@ func main() {
 	authService := services.NewAuthService(queries, cfg)
 	llmService := services.NewLLMService(&cfg.OpenAI)
 	chatService := services.NewChatService(queries, llmService, analyticsService)
-	referralService := services.NewReferralService(queries, analyticsService, cfg.Server.BaseURL)
+	referralService := services.NewReferralService(queries, analyticsService, cfg.Server.BaseURL, cfg.Referral.IPSalt)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService, analyticsService, referralService)
@@ -80,6 +80,9 @@ func main() {
 
 	// Initialize middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService)
+	// Rate limiter for public endpoints (Troy Hunt: prevent abuse)
+	// 60 requests per minute per IP for public referral endpoints
+	publicRateLimiter := middleware.NewRateLimiter(60, time.Minute)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -121,7 +124,9 @@ func main() {
 		})
 
 		// Public referral routes (for tracking clicks and validation)
+		// Rate limited to prevent abuse (Troy Hunt recommendation)
 		r.Route("/referral", func(r chi.Router) {
+			r.Use(publicRateLimiter.Limit)
 			r.Post("/click", referralHandler.RecordClick)
 			r.Get("/validate/{code}", referralHandler.ValidateCode)
 		})

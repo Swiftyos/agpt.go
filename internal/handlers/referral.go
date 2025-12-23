@@ -299,12 +299,12 @@ func (h *ReferralHandler) RecordClick(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Hash the IP for privacy
+	// Hash the IP for privacy (Troy Hunt: use configurable salt)
 	ipHash := ""
 	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
-		ipHash = services.HashIP(ip)
+		ipHash = h.referralService.HashIP(ip)
 	} else if ip := r.RemoteAddr; ip != "" {
-		ipHash = services.HashIP(ip)
+		ipHash = h.referralService.HashIP(ip)
 	}
 
 	click, err := h.referralService.RecordClick(
