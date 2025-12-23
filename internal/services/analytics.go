@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/agpt-go/chatbot-api/internal/config"
@@ -22,9 +23,9 @@ const (
 	EventUserLoggedIn = "user_logged_in"
 
 	// Activation events
-	EventSessionCreated         = "session_created"
-	EventMessageSent            = "message_sent"
-	EventBusinessContextAdded   = "business_context_added"
+	EventSessionCreated          = "session_created"
+	EventMessageSent             = "message_sent"
+	EventBusinessContextAdded    = "business_context_added"
 	EventBusinessReportRequested = "business_report_requested"
 
 	// Retention tracking (properties on events)
@@ -33,6 +34,13 @@ const (
 	PropertyDaysSinceLastSeen = "days_since_last_seen"
 	PropertySessionCount      = "session_count"
 	PropertyMessageCount      = "message_count"
+
+	// Referral events (future)
+	EventReferralSent     = "referral_sent"
+	EventReferralAccepted = "referral_accepted"
+
+	// Error tracking
+	EventError = "error_occurred"
 )
 
 // NewAnalyticsService creates a new analytics service with PostHog client
@@ -111,19 +119,30 @@ func (s *AnalyticsService) Track(userID uuid.UUID, event string, properties map[
 	}
 }
 
+// getSignupCohort returns the cohort identifier (YYYY-WW format for week-based cohorts)
+func getSignupCohort(t time.Time) string {
+	year, week := t.ISOWeek()
+	return fmt.Sprintf("%d-W%02d", year, week)
+}
+
 // TrackUserSignedUp tracks a new user registration
 func (s *AnalyticsService) TrackUserSignedUp(userID uuid.UUID, email, name, signupMethod string) {
-	// Identify the user with initial properties
+	now := time.Now()
+	cohort := getSignupCohort(now)
+
+	// Identify the user with initial properties (using $set_once for immutable props)
 	s.Identify(userID, map[string]interface{}{
 		"email":         email,
 		"name":          name,
 		"signup_method": signupMethod,
-		"signup_date":   time.Now().Format(time.RFC3339),
+		"signup_date":   now.Format(time.RFC3339),
+		"signup_cohort": cohort, // Brian Balfour: essential for retention analysis
 	})
 
 	// Track the signup event
 	s.Track(userID, EventUserSignedUp, map[string]interface{}{
 		"signup_method": signupMethod,
+		"signup_cohort": cohort,
 	})
 }
 
@@ -236,4 +255,41 @@ func CalculateCompletenessPercentage(status UnderstandingStatus) float64 {
 	}
 
 	return float64(filled) / float64(total) * 100
+}
+
+// TrackError tracks error events for debugging and monitoring
+func (s *AnalyticsService) TrackError(userID uuid.UUID, errorType, errorMessage, context string) {
+	s.Track(userID, EventError, map[string]interface{}{
+		"error_type":    errorType,
+		"error_message": errorMessage,
+		"context":       context,
+	})
+}
+
+// IdentifyCompany identifies a company/organization for B2B group analytics
+// This enables tracking metrics at the company level, not just user level
+func (s *AnalyticsService) IdentifyCompany(userID uuid.UUID, companyName, industry, size string) {
+	if !s.enabled || companyName == "" {
+		return
+	}
+
+	// Associate user with company group
+	err := s.client.Enqueue(posthog.GroupIdentify{
+		Type: "company",
+		Key:  companyName,
+		Properties: posthog.NewProperties().
+			Set("name", companyName).
+			Set("industry", industry).
+			Set("size", size),
+	})
+	if err != nil {
+		logging.Error("failed to identify company", err, "company", companyName)
+	}
+
+	// Link user to this company
+	s.Identify(userID, map[string]interface{}{
+		"$groups": map[string]string{
+			"company": companyName,
+		},
+	})
 }

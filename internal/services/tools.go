@@ -339,6 +339,23 @@ func (s *ToolService) ExecuteAddUnderstanding(ctx context.Context, userID uuid.U
 	if s.analytics != nil {
 		completeness := CalculateCompletenessPercentage(status)
 		s.analytics.TrackBusinessContextAdded(userID, updatedFields, completeness)
+
+		// Identify company for B2B group analytics (PostHog recommendation)
+		if input.BusinessName != "" || input.Industry != "" || input.BusinessSize != "" {
+			businessName := input.BusinessName
+			if businessName == "" && understanding.BusinessName != nil {
+				businessName = *understanding.BusinessName
+			}
+			industry := input.Industry
+			if industry == "" && understanding.Industry != nil {
+				industry = *understanding.Industry
+			}
+			size := input.BusinessSize
+			if size == "" && understanding.BusinessSize != nil {
+				size = *understanding.BusinessSize
+			}
+			s.analytics.IdentifyCompany(userID, businessName, industry, size)
+		}
 	}
 
 	// Generate next steps message
