@@ -43,6 +43,29 @@ type Querier interface {
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpsertBusinessUnderstanding(ctx context.Context, arg UpsertBusinessUnderstandingParams) (BusinessUnderstanding, error)
+	// Referral tracking methods
+	CountReferralSharesByReferrer(ctx context.Context, referrerID uuid.UUID) (int64, error)
+	CountReferralSignupsByReferrer(ctx context.Context, referrerID uuid.UUID) (int64, error)
+	CreateReferralClick(ctx context.Context, arg CreateReferralClickParams) (ReferralClick, error)
+	CreateReferralCode(ctx context.Context, arg CreateReferralCodeParams) (ReferralCode, error)
+	CreateReferralShare(ctx context.Context, arg CreateReferralShareParams) (ReferralShare, error)
+	CreateReferralSignup(ctx context.Context, arg CreateReferralSignupParams) (ReferralSignup, error)
+	GetReferralCodeByCode(ctx context.Context, code string) (ReferralCode, error)
+	GetReferralCodeByUserID(ctx context.Context, userID uuid.UUID) (ReferralCode, error)
+	GetReferralClickByVisitor(ctx context.Context, visitorID *string) (ReferralClick, error)
+	GetReferralLeaderboard(ctx context.Context, limit int32) ([]GetReferralLeaderboardRow, error)
+	GetReferralSharesByReferrer(ctx context.Context, referrerID uuid.UUID, limit int32) ([]ReferralShare, error)
+	GetReferralSignupByReferee(ctx context.Context, refereeID uuid.UUID) (ReferralSignup, error)
+	GetReferralSignupsByReferrer(ctx context.Context, referrerID uuid.UUID, limit int32, offset int32) ([]GetReferralSignupsByReferrerRow, error)
+	GetReferralStats(ctx context.Context, userID uuid.UUID) (GetReferralStatsRow, error)
+	IncrementReferralActivations(ctx context.Context, id uuid.UUID) error
+	IncrementReferralClicks(ctx context.Context, id uuid.UUID) error
+	IncrementReferralShares(ctx context.Context, id uuid.UUID) error
+	IncrementReferralSignups(ctx context.Context, id uuid.UUID) error
+	UpdateReferralClickConverted(ctx context.Context, arg UpdateReferralClickConvertedParams) error
+	UpdateReferralSignupActivated(ctx context.Context, refereeID uuid.UUID) error
+	UpdateReferralSignupFirstReport(ctx context.Context, refereeID uuid.UUID) error
+	UpdateReferralSignupStatus(ctx context.Context, arg UpdateReferralSignupStatusParams) error
 }
 
 var _ Querier = (*Queries)(nil)

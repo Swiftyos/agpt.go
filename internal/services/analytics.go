@@ -35,9 +35,11 @@ const (
 	PropertySessionCount      = "session_count"
 	PropertyMessageCount      = "message_count"
 
-	// Referral events (future)
-	EventReferralSent     = "referral_sent"
-	EventReferralAccepted = "referral_accepted"
+	// Referral events - Growth loop tracking (Brian Balfour, Andrew Chen, Kieran Flanagan)
+	EventReferralShared    = "referral_shared"      // User shared their referral link
+	EventReferralClicked   = "referral_link_clicked" // Someone clicked a referral link
+	EventReferralSignup    = "referral_signup"       // New user signed up via referral
+	EventReferralActivated = "referral_activated"    // Referred user reached activation
 
 	// Error tracking
 	EventError = "error_occurred"
@@ -372,5 +374,103 @@ func (s *AnalyticsService) IdentifyCompany(userID uuid.UUID, companyName, indust
 		"$groups": map[string]string{
 			"company": companyName,
 		},
+	})
+}
+
+// Referral tracking methods - Growth loop analytics
+// Expert guidance: Brian Balfour (Reforge), Andrew Chen (a16z), Kieran Flanagan (Zapier)
+
+// TrackReferralShared tracks when a user shares their referral link
+// Elena Verna: Track share_intent vs share_completed
+func (s *AnalyticsService) TrackReferralShared(userID uuid.UUID, channel, source string, completed bool) {
+	now := time.Now()
+
+	s.Track(userID, EventReferralShared, map[string]interface{}{
+		"share_channel":   channel,
+		"share_source":    source,
+		"share_completed": completed,
+	})
+
+	// Track first share milestone with $set_once
+	s.IdentifyOnce(userID, map[string]interface{}{
+		"first_share_date":      now.Format(time.RFC3339),
+		"first_share_timestamp": now.Unix(),
+		"first_share_channel":   channel,
+	})
+
+	// Update mutable share stats
+	s.Identify(userID, map[string]interface{}{
+		"has_shared_referral": true,
+		"last_share_date":     now.Format(time.RFC3339),
+		"last_share_channel":  channel,
+	})
+}
+
+// TrackReferralLinkClicked tracks when someone clicks a referral link
+// Kieran Flanagan: Track full referral journey
+func (s *AnalyticsService) TrackReferralLinkClicked(referrerID uuid.UUID, referralCode string) {
+	s.Track(referrerID, EventReferralClicked, map[string]interface{}{
+		"referral_code": referralCode,
+	})
+}
+
+// TrackReferralSignup tracks when a new user signs up via referral
+// Andrew Chen: Full attribution for referral signups
+func (s *AnalyticsService) TrackReferralSignup(referrerID, refereeID uuid.UUID, referralCode string) {
+	now := time.Now()
+
+	// Track event for the referrer
+	s.Track(referrerID, EventReferralSignup, map[string]interface{}{
+		"referee_id":    refereeID.String(),
+		"referral_code": referralCode,
+	})
+
+	// Update referrer properties
+	s.Identify(referrerID, map[string]interface{}{
+		"has_successful_referral": true,
+		"last_referral_date":      now.Format(time.RFC3339),
+	})
+
+	// Track first successful referral with $set_once
+	s.IdentifyOnce(referrerID, map[string]interface{}{
+		"first_referral_date":      now.Format(time.RFC3339),
+		"first_referral_timestamp": now.Unix(),
+	})
+
+	// Set properties on the new user (referee)
+	s.IdentifyOnce(refereeID, map[string]interface{}{
+		"referred_by":            referrerID.String(),
+		"referral_code_used":     referralCode,
+		"referral_signup_date":   now.Format(time.RFC3339),
+		"acquisition_channel":    "referral",
+	})
+}
+
+// TrackReferralActivated tracks when a referred user reaches activation milestone
+// Dave McClure: Activation is the key metric for referral success
+func (s *AnalyticsService) TrackReferralActivated(referrerID, refereeID uuid.UUID) {
+	now := time.Now()
+
+	// Track event for the referrer
+	s.Track(referrerID, EventReferralActivated, map[string]interface{}{
+		"referee_id": refereeID.String(),
+	})
+
+	// Update referrer properties
+	s.Identify(referrerID, map[string]interface{}{
+		"has_activated_referral":    true,
+		"last_referral_activation":  now.Format(time.RFC3339),
+	})
+
+	// Track first activated referral with $set_once
+	s.IdentifyOnce(referrerID, map[string]interface{}{
+		"first_referral_activation_date":      now.Format(time.RFC3339),
+		"first_referral_activation_timestamp": now.Unix(),
+	})
+
+	// Update referee properties
+	s.Identify(refereeID, map[string]interface{}{
+		"referral_activated":    true,
+		"referral_activated_at": now.Format(time.RFC3339),
 	})
 }

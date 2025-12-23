@@ -29,6 +29,7 @@ type ServerConfig struct {
 	Port         string
 	Environment  string
 	AllowOrigins []string
+	BaseURL      string // Base URL for generating share links (e.g., https://app.example.com)
 }
 
 type DatabaseConfig struct {
@@ -119,6 +120,7 @@ func Load() (*Config, error) {
 			Port:         getEnv("PORT", "8080"),
 			Environment:  getEnv("ENVIRONMENT", "development"),
 			AllowOrigins: []string{getEnv("CORS_ORIGINS", "http://localhost:3000")},
+			BaseURL:      getEnv("BASE_URL", "http://localhost:3000"),
 		},
 		Database: DatabaseConfig{
 			Host:        getEnv("DB_HOST", "localhost"),

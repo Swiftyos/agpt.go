@@ -50,3 +50,8 @@ type AnalyticsServicer interface {
 	TrackSessionCreated(userID uuid.UUID, sessionID uuid.UUID, isReturningUser bool, sessionCount int)
 	TrackMessageSent(userID uuid.UUID, sessionID uuid.UUID, messageNumber int, isFirstMessage bool)
 }
+
+// ReferralServicer defines the interface for referral service operations
+type ReferralServicer interface {
+	ProcessReferralSignup(ctx context.Context, newUserID uuid.UUID, referralCode string, visitorID *string) error
+}
