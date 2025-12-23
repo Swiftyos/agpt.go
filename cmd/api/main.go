@@ -69,15 +69,20 @@ func main() {
 	authService := services.NewAuthService(queries, cfg)
 	llmService := services.NewLLMService(&cfg.OpenAI)
 	chatService := services.NewChatService(queries, llmService, analyticsService)
+	referralService := services.NewReferralService(queries, analyticsService, cfg.Server.BaseURL, cfg.Referral.IPSalt)
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(authService, analyticsService)
+	authHandler := handlers.NewAuthHandler(authService, analyticsService, referralService)
 	chatHandler := handlers.NewChatHandler(chatService, analyticsService)
 	sessionHandler := handlers.NewSessionHandler(queries)
 	openapiHandler := handlers.NewOpenAPIHandler()
+	referralHandler := handlers.NewReferralHandler(referralService)
 
 	// Initialize middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService)
+	// Rate limiter for public endpoints (Troy Hunt: prevent abuse)
+	// 60 requests per minute per IP for public referral endpoints
+	publicRateLimiter := middleware.NewRateLimiter(60, time.Minute)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -118,6 +123,14 @@ func main() {
 			r.Get("/google/callback", authHandler.GoogleCallback)
 		})
 
+		// Public referral routes (for tracking clicks and validation)
+		// Rate limited to prevent abuse (Troy Hunt recommendation)
+		r.Route("/referral", func(r chi.Router) {
+			r.Use(publicRateLimiter.Limit)
+			r.Post("/click", referralHandler.RecordClick)
+			r.Get("/validate/{code}", referralHandler.ValidateCode)
+		})
+
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.RequireAuth)
@@ -137,6 +150,15 @@ func main() {
 				r.Get("/{sessionID}/messages", chatHandler.GetMessages)
 				r.Post("/{sessionID}/messages", chatHandler.SendMessage)
 				r.Post("/{sessionID}/messages/stream", chatHandler.SendMessageStream)
+			})
+
+			// Protected referral routes (for authenticated users)
+			r.Route("/referral", func(r chi.Router) {
+				r.Get("/code", referralHandler.GetReferralCode)
+				r.Post("/share", referralHandler.RecordShare)
+				r.Get("/stats", referralHandler.GetReferralStats)
+				r.Get("/referred", referralHandler.GetReferredUsers)
+				r.Get("/shares", referralHandler.GetShareHistory)
 			})
 		})
 	})

@@ -91,12 +91,12 @@ func (m *mockAuthService) HandleGoogleCallback(ctx context.Context, code string)
 
 func createTestAuthHandler(t *testing.T) *AuthHandler {
 	t.Helper()
-	return NewAuthHandler(&mockAuthService{}, nil)
+	return NewAuthHandler(&mockAuthService{}, nil, nil)
 }
 
 func TestNewAuthHandler(t *testing.T) {
 	mockService := &mockAuthService{}
-	handler := NewAuthHandler(mockService, nil)
+	handler := NewAuthHandler(mockService, nil, nil)
 
 	if handler == nil {
 		t.Fatal("NewAuthHandler() returned nil")

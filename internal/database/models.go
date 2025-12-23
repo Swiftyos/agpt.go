@@ -80,3 +80,59 @@ type BusinessUnderstanding struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
+
+// Referral tracking models
+
+type ReferralCode struct {
+	ID               uuid.UUID          `json:"id"`
+	UserID           uuid.UUID          `json:"user_id"`
+	Code             string             `json:"code"`
+	Industry         *string            `json:"industry"`
+	BusinessSize     *string            `json:"business_size"`
+	TotalShares      int32              `json:"total_shares"`
+	TotalClicks      int32              `json:"total_clicks"`
+	TotalSignups     int32              `json:"total_signups"`
+	TotalActivations int32              `json:"total_activations"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ReferralShare struct {
+	ID             uuid.UUID          `json:"id"`
+	ReferrerID     uuid.UUID          `json:"referrer_id"`
+	ReferralCodeID uuid.UUID          `json:"referral_code_id"`
+	ShareChannel   string             `json:"share_channel"`
+	ShareSource    *string            `json:"share_source"`
+	Completed      *bool              `json:"completed"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type ReferralClick struct {
+	ID              uuid.UUID          `json:"id"`
+	ReferralCodeID  uuid.UUID          `json:"referral_code_id"`
+	VisitorID       *string            `json:"visitor_id"`
+	IpHash          *string            `json:"ip_hash"`
+	UserAgent       *string            `json:"user_agent"`
+	LandingPage     *string            `json:"landing_page"`
+	UtmSource       *string            `json:"utm_source"`
+	UtmMedium       *string            `json:"utm_medium"`
+	UtmCampaign     *string            `json:"utm_campaign"`
+	ConvertedUserID *uuid.UUID         `json:"converted_user_id"`
+	ConvertedAt     pgtype.Timestamptz `json:"converted_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type ReferralSignup struct {
+	ID                    uuid.UUID          `json:"id"`
+	RefereeID             uuid.UUID          `json:"referee_id"`
+	ReferrerID            uuid.UUID          `json:"referrer_id"`
+	ReferralCodeID        uuid.UUID          `json:"referral_code_id"`
+	ClickID               *uuid.UUID         `json:"click_id"`
+	InheritedIndustry     *string            `json:"inherited_industry"`
+	InheritedBusinessSize *string            `json:"inherited_business_size"`
+	ActivatedAt           pgtype.Timestamptz `json:"activated_at"`
+	FirstReportAt         pgtype.Timestamptz `json:"first_report_at"`
+	Status                *string            `json:"status"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}

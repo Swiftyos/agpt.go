@@ -11,23 +11,27 @@ import (
 )
 
 type AuthHandler struct {
-	authService AuthServicer
-	analytics   AnalyticsServicer
-	validate    Validator
+	authService     AuthServicer
+	analytics       AnalyticsServicer
+	referralService ReferralServicer
+	validate        Validator
 }
 
-func NewAuthHandler(authService AuthServicer, analytics AnalyticsServicer) *AuthHandler {
+func NewAuthHandler(authService AuthServicer, analytics AnalyticsServicer, referralService ReferralServicer) *AuthHandler {
 	return &AuthHandler{
-		authService: authService,
-		analytics:   analytics,
-		validate:    validator.New(),
+		authService:     authService,
+		analytics:       analytics,
+		referralService: referralService,
+		validate:        validator.New(),
 	}
 }
 
 type RegisterRequest struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8"`
-	Name     string `json:"name" validate:"required,min=2"`
+	Email        string  `json:"email" validate:"required,email"`
+	Password     string  `json:"password" validate:"required,min=8"`
+	Name         string  `json:"name" validate:"required,min=2"`
+	ReferralCode *string `json:"referral_code,omitempty"` // Optional referral code
+	VisitorID    *string `json:"visitor_id,omitempty"`    // Optional visitor ID for click attribution
 }
 
 type LoginRequest struct {
@@ -90,6 +94,18 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Track signup event
 	if h.analytics != nil {
 		h.analytics.TrackUserSignedUp(user.ID, user.Email, user.Name, "email")
+	}
+
+	// Process referral if a referral code was provided
+	if h.referralService != nil && req.ReferralCode != nil && *req.ReferralCode != "" {
+		if err := h.referralService.ProcessReferralSignup(r.Context(), user.ID, *req.ReferralCode, req.VisitorID); err != nil {
+			// Log error but don't fail the registration
+			logging.Warn("failed to process referral signup", "error", err, "code", *req.ReferralCode)
+			// Charity Majors: Track errors in analytics for observability
+			if h.analytics != nil {
+				h.analytics.TrackError(user.ID, "referral_attribution", err.Error(), *req.ReferralCode)
+			}
+		}
 	}
 
 	writeJSON(w, http.StatusCreated, AuthResponse{

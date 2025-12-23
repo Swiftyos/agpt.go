@@ -49,4 +49,13 @@ type AnalyticsServicer interface {
 	TrackUserLoggedIn(userID uuid.UUID, loginMethod string)
 	TrackSessionCreated(userID uuid.UUID, sessionID uuid.UUID, isReturningUser bool, sessionCount int)
 	TrackMessageSent(userID uuid.UUID, sessionID uuid.UUID, messageNumber int, isFirstMessage bool)
+	// Charity Majors: Track errors for observability
+	TrackError(userID uuid.UUID, errorType, errorMessage, context string)
+}
+
+// ReferralServicer defines the interface for referral service operations
+type ReferralServicer interface {
+	ProcessReferralSignup(ctx context.Context, newUserID uuid.UUID, referralCode string, visitorID *string) error
+	HashIP(ip string) string
+	HashVisitorID(visitorID string) string
 }
